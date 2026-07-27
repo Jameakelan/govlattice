@@ -1,3 +1,5 @@
+"""Stable runtime inputs supplied to requirement evaluators."""
+
 from dataclasses import dataclass
 from typing import Any
 from typing import Mapping
@@ -9,6 +11,12 @@ from govlattice.model.immutable import freeze_value
 
 @dataclass(frozen=True, init=False)
 class RequirementEvaluationContext:
+    """Immutable inputs available while evaluating one requirement scope.
+
+    A segment evaluation replaces only ``dataset``; metrics and execution
+    provenance remain identical to the parent state evaluation.
+    """
+
     __slots__ = ("dataset", "metrics", "execution")
 
     dataset: DatasetAdapter
@@ -40,6 +48,7 @@ class RequirementEvaluationContext:
         self,
         dataset: DatasetAdapter,
     ) -> "RequirementEvaluationContext":
+        """Return a context for another dataset while preserving metadata."""
         return RequirementEvaluationContext(
             dataset=dataset,
             metrics=self.metrics,

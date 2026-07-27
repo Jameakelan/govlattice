@@ -1,3 +1,5 @@
+"""Evaluator for maximum column missing-rate requirements."""
+
 from govlattice.evaluator.requirement_evaluation_context import (
     RequirementEvaluationContext,
 )
@@ -8,6 +10,8 @@ from govlattice.model import RequirementDefinition
 
 
 class MissingRateEvaluator:
+    """Check that a column's missing-value rate is within its maximum."""
+
     requirement_type = "require_missing_rate"
 
     def evaluate(
@@ -15,6 +19,7 @@ class MissingRateEvaluator:
         requirement: RequirementDefinition,
         context: RequirementEvaluationContext,
     ) -> RequirementEvaluation:
+        """Evaluate a ``require_missing_rate`` requirement."""
         column = requirement.parameters["column"]
         if column not in context.dataset.columns:
             return RequirementEvaluation.error(

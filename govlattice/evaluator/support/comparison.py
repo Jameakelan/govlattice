@@ -1,3 +1,5 @@
+"""Comparison operations shared by metric and column evaluators."""
+
 from typing import Any
 
 from govlattice.enum import ComparisonOperator
@@ -8,6 +10,12 @@ def compare_values(
     operator: ComparisonOperator,
     expected: Any,
 ) -> bool:
+    """Compare an observed value to an expected value.
+
+    Raises:
+        ValueError: If ``operator`` is not a supported comparison operator.
+        TypeError: If the values cannot be compared by the operator.
+    """
     if operator is ComparisonOperator.LT:
         return observed < expected
     if operator is ComparisonOperator.LTE:

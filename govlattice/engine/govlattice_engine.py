@@ -1,3 +1,5 @@
+"""Policy verification and enforcement orchestration."""
+
 from datetime import datetime
 from datetime import timezone
 from time import perf_counter
@@ -20,6 +22,14 @@ from govlattice.model import RequirementFinding
 
 
 class GovLatticeEngine:
+    """Evaluate policies without depending on requirement implementations.
+
+    The engine selects state and segment scopes, delegates each requirement
+    to the registered evaluator, and aggregates immutable findings. Use
+    :meth:`verify` for reporting and :meth:`enforce` at workflow boundaries
+    that must stop when compliance cannot be established.
+    """
+
     __slots__ = ("_registry",)
 
     def __init__(
@@ -40,6 +50,14 @@ class GovLatticeEngine:
         *,
         replace: bool = False,
     ) -> "GovLatticeEngine":
+        """Register a requirement evaluator and return this engine.
+
+        The preferred form is ``register_evaluator(evaluator)``, where the
+        evaluator declares ``requirement_type``. The legacy
+        ``register_evaluator(requirement_type, evaluator)`` form remains
+        supported. Existing registrations are protected unless ``replace``
+        is explicitly true.
+        """
         self._registry.register(
             requirement_type_or_evaluator,
             evaluator,
@@ -54,6 +72,26 @@ class GovLatticeEngine:
         state: str,
         context: EvaluationContext,
     ) -> PolicyEvaluationResult:
+        """Evaluate one policy state and return a complete audit result.
+
+        Requirement failures are represented as ``FAILED`` findings rather
+        than exceptions. Evaluation problems, including missing runtime
+        inputs and evaluator exceptions, become ``ERROR`` findings. Invalid
+        API usage still raises a typed exception.
+
+        Args:
+            policy: Immutable policy definition to evaluate.
+            state: Identifier of the state to evaluate.
+            context: Dataset, metrics, and execution provenance.
+
+        Returns:
+            An immutable result containing all state and segment findings.
+
+        Raises:
+            TypeError: If an argument has an invalid type.
+            ValueError: If ``state`` is empty.
+            UnknownPolicyStateError: If the policy has no requested state.
+        """
         if not isinstance(policy, PolicyDefinition):
             raise TypeError("policy must be a PolicyDefinition")
         if not isinstance(state, str) or not state.strip():
@@ -196,6 +234,22 @@ class GovLatticeEngine:
         state: str,
         context: EvaluationContext,
     ) -> PolicyEvaluationResult:
+        """Verify a policy and block execution when it is non-compliant.
+
+        ``PASSED`` and ``SKIPPED`` results are returned. ``FAILED`` and
+        ``ERROR`` results raise :class:`PolicyEnforcementError`, whose
+        ``result`` attribute contains the complete verification report.
+
+        Returns:
+            The verification result when execution is allowed to continue.
+
+        Raises:
+            PolicyEnforcementError: If verification returns ``FAILED`` or
+                ``ERROR``.
+            UnknownPolicyStateError: If the requested state does not exist.
+            TypeError: If an argument has an invalid type.
+            ValueError: If ``state`` is empty.
+        """
         result = self.verify(
             policy,
             state=state,
@@ -214,6 +268,7 @@ class GovLatticeEngine:
         requirements: tuple[RequirementDefinition, ...],
         context: RequirementEvaluationContext,
     ) -> tuple[RequirementFinding, ...]:
+        """Evaluate every requirement for one already-selected data scope."""
         findings: list[RequirementFinding] = []
         for requirement in requirements:
             evaluator = self._registry.get(requirement.type)
@@ -274,6 +329,7 @@ class GovLatticeEngine:
     def _aggregate_status(
         findings: list[RequirementFinding],
     ) -> EvaluationStatus:
+        """Aggregate finding statuses using the documented precedence."""
         statuses = {finding.status for finding in findings}
         if EvaluationStatus.ERROR in statuses:
             return EvaluationStatus.ERROR
@@ -285,6 +341,7 @@ class GovLatticeEngine:
 
     @staticmethod
     def _timestamp() -> str:
+        """Return the current UTC timestamp in millisecond ISO format."""
         return (
             datetime.now(timezone.utc)
             .isoformat(timespec="milliseconds")

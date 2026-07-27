@@ -1,3 +1,5 @@
+"""Evaluator for comparisons applied to non-missing column values."""
+
 from govlattice.evaluator.requirement_evaluation_context import (
     RequirementEvaluationContext,
 )
@@ -9,6 +11,8 @@ from govlattice.model import RequirementDefinition
 
 
 class ColumnValueEvaluator:
+    """Compare each non-missing value in a column with one threshold."""
+
     requirement_type = "require_column_value"
 
     def evaluate(
@@ -16,6 +20,7 @@ class ColumnValueEvaluator:
         requirement: RequirementDefinition,
         context: RequirementEvaluationContext,
     ) -> RequirementEvaluation:
+        """Evaluate a ``require_column_value`` requirement."""
         column = requirement.parameters["column"]
         if column not in context.dataset.columns:
             return RequirementEvaluation.error(

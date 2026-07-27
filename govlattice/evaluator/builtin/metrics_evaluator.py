@@ -1,3 +1,5 @@
+"""Evaluator for multiple runtime metric minimums."""
+
 from govlattice.evaluator.requirement_evaluation_context import (
     RequirementEvaluationContext,
 )
@@ -8,6 +10,8 @@ from govlattice.model import RequirementDefinition
 
 
 class MetricsEvaluator:
+    """Check multiple supplied metrics against their minimum thresholds."""
+
     requirement_type = "require_metrics"
 
     def evaluate(
@@ -15,6 +19,7 @@ class MetricsEvaluator:
         requirement: RequirementDefinition,
         context: RequirementEvaluationContext,
     ) -> RequirementEvaluation:
+        """Evaluate a ``require_metrics`` requirement."""
         thresholds = requirement.parameters["metrics"]
         missing = tuple(
             name for name in thresholds if name not in context.metrics

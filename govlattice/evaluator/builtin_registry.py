@@ -1,3 +1,5 @@
+"""Explicit catalog of evaluators included with GovLattice."""
+
 from govlattice.evaluator.builtin import ColumnValueEvaluator
 from govlattice.evaluator.builtin import MetricEvaluator
 from govlattice.evaluator.builtin import MetricsEvaluator
@@ -20,6 +22,7 @@ BUILTIN_EVALUATORS = (
 
 
 def create_builtin_registry() -> EvaluatorRegistry:
+    """Create an independent registry containing all built-in evaluators."""
     registry = EvaluatorRegistry()
     for evaluator in BUILTIN_EVALUATORS:
         registry.register(evaluator)

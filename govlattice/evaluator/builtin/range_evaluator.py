@@ -1,3 +1,5 @@
+"""Evaluator for inclusive numeric column ranges."""
+
 from govlattice.evaluator.requirement_evaluation_context import (
     RequirementEvaluationContext,
 )
@@ -8,6 +10,8 @@ from govlattice.model import RequirementDefinition
 
 
 class RangeEvaluator:
+    """Check all non-missing column values against an inclusive range."""
+
     requirement_type = "require_range"
 
     def evaluate(
@@ -15,6 +19,7 @@ class RangeEvaluator:
         requirement: RequirementDefinition,
         context: RequirementEvaluationContext,
     ) -> RequirementEvaluation:
+        """Evaluate a ``require_range`` requirement."""
         column = requirement.parameters["column"]
         if column not in context.dataset.columns:
             return RequirementEvaluation.error(

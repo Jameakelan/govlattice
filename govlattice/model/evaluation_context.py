@@ -1,3 +1,5 @@
+"""Top-level runtime input supplied to the policy engine."""
+
 from dataclasses import dataclass
 from typing import Any
 from typing import Mapping
@@ -10,6 +12,11 @@ from govlattice.model.immutable import freeze_value
 
 @dataclass(frozen=True, init=False)
 class EvaluationContext:
+    """Bundle dataset inputs, runtime metrics, and execution provenance.
+
+    Metrics are recursively frozen and an empty :class:`ExecutionContext` is
+    created when provenance is not supplied.
+    """
     __slots__ = ("dataset", "metrics", "execution")
 
     dataset: DatasetAdapter

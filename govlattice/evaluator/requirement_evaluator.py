@@ -1,3 +1,5 @@
+"""Contracts and immutable outcomes for requirement evaluation."""
+
 from dataclasses import dataclass
 from typing import Any
 from typing import Mapping
@@ -14,6 +16,12 @@ from govlattice.model.immutable import freeze_value
 
 @dataclass(frozen=True, init=False)
 class RequirementEvaluation:
+    """Describe the outcome produced by one requirement evaluator.
+
+    ``expected`` and ``observed`` are recursively frozen to prevent an audit
+    result from changing after evaluation.
+    """
+
     __slots__ = ("status", "expected", "observed", "message")
 
     status: EvaluationStatus
@@ -50,6 +58,7 @@ class RequirementEvaluation:
         observed: Mapping[str, Any],
         message: str,
     ) -> "RequirementEvaluation":
+        """Create a successful requirement evaluation."""
         return cls(
             status=EvaluationStatus.PASSED,
             expected=expected,
@@ -65,6 +74,7 @@ class RequirementEvaluation:
         observed: Mapping[str, Any],
         message: str,
     ) -> "RequirementEvaluation":
+        """Create a valid evaluation that did not meet the requirement."""
         return cls(
             status=EvaluationStatus.FAILED,
             expected=expected,
@@ -80,6 +90,7 @@ class RequirementEvaluation:
         observed: Mapping[str, Any],
         message: str,
     ) -> "RequirementEvaluation":
+        """Create an evaluation that could not establish compliance."""
         return cls(
             status=EvaluationStatus.ERROR,
             expected=expected,
@@ -95,6 +106,7 @@ class RequirementEvaluation:
         observed: Mapping[str, Any],
         message: str,
     ) -> "RequirementEvaluation":
+        """Create an evaluation intentionally excluded from execution."""
         return cls(
             status=EvaluationStatus.SKIPPED,
             expected=expected,
@@ -105,6 +117,12 @@ class RequirementEvaluation:
 
 @runtime_checkable
 class RequirementEvaluator(Protocol):
+    """Protocol implemented by built-in and custom requirement evaluators.
+
+    Implementations declare a unique ``requirement_type`` and must return a
+    :class:`RequirementEvaluation` without mutating the supplied context.
+    """
+
     requirement_type: str
 
     def evaluate(
@@ -112,4 +130,5 @@ class RequirementEvaluator(Protocol):
         requirement: RequirementDefinition,
         context: RequirementEvaluationContext,
     ) -> RequirementEvaluation:
+        """Evaluate one requirement against its scoped runtime context."""
         ...

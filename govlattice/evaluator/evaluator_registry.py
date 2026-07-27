@@ -1,3 +1,5 @@
+"""Registration and lookup for requirement evaluator implementations."""
+
 from typing import Any
 from typing import Optional
 
@@ -14,6 +16,8 @@ from govlattice.model import RequirementDefinition
 
 
 class _LegacyEvaluatorAdapter:
+    """Adapt the former three-argument evaluator API to the context API."""
+
     __slots__ = ("requirement_type", "_evaluator")
 
     def __init__(self, requirement_type: str, evaluator: Any) -> None:
@@ -33,6 +37,12 @@ class _LegacyEvaluatorAdapter:
 
 
 class EvaluatorRegistry:
+    """Map requirement type identifiers to evaluator implementations.
+
+    Duplicate registration is rejected by default so built-in behavior cannot
+    be replaced accidentally.
+    """
+
     __slots__ = ("_evaluators",)
 
     def __init__(self) -> None:
@@ -45,6 +55,23 @@ class EvaluatorRegistry:
         *,
         replace: bool = False,
     ) -> "EvaluatorRegistry":
+        """Register an evaluator.
+
+        Args:
+            requirement_type_or_evaluator: An evaluator declaring
+                ``requirement_type``, or an explicit type string when using
+                the legacy two-argument registration form.
+            evaluator: Optional legacy or explicitly named evaluator.
+            replace: Permit intentional replacement of an existing type.
+
+        Returns:
+            This registry for fluent configuration.
+
+        Raises:
+            ValueError: If the type is invalid, mismatched, or already used.
+            TypeError: If the object does not implement the evaluator
+                protocol.
+        """
         if evaluator is None:
             candidate = requirement_type_or_evaluator
             requirement_type = getattr(
@@ -101,4 +128,5 @@ class EvaluatorRegistry:
         self,
         requirement_type: str,
     ) -> Optional[RequirementEvaluator]:
+        """Return the evaluator for a requirement type, if registered."""
         return self._evaluators.get(requirement_type)

@@ -1,3 +1,5 @@
+"""Evaluator for composite dataset uniqueness."""
+
 from govlattice.evaluator.requirement_evaluation_context import (
     RequirementEvaluationContext,
 )
@@ -9,6 +11,8 @@ from govlattice.model import RequirementDefinition
 
 
 class UniqueColumnsEvaluator:
+    """Check that a tuple of column values uniquely identifies each row."""
+
     requirement_type = "require_unique"
 
     def evaluate(
@@ -16,6 +20,7 @@ class UniqueColumnsEvaluator:
         requirement: RequirementDefinition,
         context: RequirementEvaluationContext,
     ) -> RequirementEvaluation:
+        """Evaluate a ``require_unique`` requirement."""
         columns = tuple(requirement.parameters["columns"])
         missing = missing_columns(context.dataset, columns)
         if missing:

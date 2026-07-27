@@ -1,3 +1,5 @@
+"""Typed exceptions raised by policy engine APIs."""
+
 from govlattice.model import PolicyEvaluationResult
 
 
@@ -10,7 +12,12 @@ class UnknownPolicyStateError(GovLatticeEngineError):
 
 
 class PolicyEnforcementError(GovLatticeEngineError):
-    """Raised when policy enforcement blocks further execution."""
+    """Raised when policy enforcement blocks further execution.
+
+    The complete immutable :class:`PolicyEvaluationResult` is available from
+    ``result`` so callers can log, display, or persist the audit report before
+    stopping their workflow.
+    """
 
     __slots__ = ("result",)
 

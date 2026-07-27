@@ -1,3 +1,5 @@
+"""Optional actor identity and execution provenance for policy evaluation."""
+
 from dataclasses import dataclass
 from typing import Any
 from typing import Mapping
@@ -9,6 +11,11 @@ from govlattice.model.immutable import freeze_value
 
 @dataclass(frozen=True, init=False)
 class ActorProfile:
+    """Describe the human, service, or workflow responsible for a run.
+
+    Actor data is audit context only; GovLattice does not authenticate the
+    subject or authorize its roles.
+    """
     __slots__ = (
         "subject_id",
         "actor_type",
@@ -83,6 +90,7 @@ class ActorProfile:
         name: str,
         value: Optional[str],
     ) -> Optional[str]:
+        """Normalize optional non-empty text fields."""
         if value is None:
             return None
         if not isinstance(value, str) or not value.strip():
@@ -92,6 +100,7 @@ class ActorProfile:
 
 @dataclass(frozen=True, init=False)
 class ExecutionContext:
+    """Capture immutable provenance associated with one engine execution."""
     __slots__ = (
         "actor",
         "environment",

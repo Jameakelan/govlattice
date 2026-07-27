@@ -1,3 +1,5 @@
+"""Evaluator for one runtime metric threshold."""
+
 from govlattice.evaluator.requirement_evaluation_context import (
     RequirementEvaluationContext,
 )
@@ -9,6 +11,8 @@ from govlattice.model import RequirementDefinition
 
 
 class MetricEvaluator:
+    """Compare one supplied runtime metric with a policy threshold."""
+
     requirement_type = "require_metric"
 
     def evaluate(
@@ -16,6 +20,7 @@ class MetricEvaluator:
         requirement: RequirementDefinition,
         context: RequirementEvaluationContext,
     ) -> RequirementEvaluation:
+        """Evaluate a ``require_metric`` requirement."""
         metric = requirement.parameters["metric"]
         if metric not in context.metrics:
             return RequirementEvaluation.error(
