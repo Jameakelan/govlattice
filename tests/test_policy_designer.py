@@ -1,12 +1,33 @@
+import json
 import os
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
 
+import govlattice
 from govlattice.designer.policy_designer import PolicyDesigner
+from govlattice.verifier.range_overlap_verifier import OverlapRangeError
 
 
 class PolicyDesignerTests(unittest.TestCase):
+    def test_public_versions(self) -> None:
+        self.assertEqual(govlattice.__version__, "0.2.0")
+        self.assertEqual(govlattice.__schema_version__, "1.1.0")
+
+    def test_json_schema_uses_public_schema_version(self) -> None:
+        schema_path = (
+            Path(__file__).resolve().parents[1]
+            / "schemas"
+            / "govlattice-policy.schema.json"
+        )
+        schema = json.loads(schema_path.read_text(encoding="utf-8"))
+
+        self.assertIn("schema_version", schema["required"])
+        self.assertEqual(
+            schema["properties"]["schema_version"]["const"],
+            govlattice.__schema_version__,
+        )
+
     def test_dev_example_builds_column_requirement(self) -> None:
         policy = (
             PolicyDesigner(policy_name="A10-health-policy")
@@ -15,9 +36,11 @@ class PolicyDesignerTests(unittest.TestCase):
         )
 
         self.assertEqual(policy.state_id, "dataset")
+        requirement = policy.requirements[0]
+        self.assertEqual(requirement.type, "require_columns")
         self.assertEqual(
-            policy.requirements,
-            (("require_columns", ("id", "name")),),
+            requirement.parameters,
+            {"columns": ("id", "name")},
         )
 
     def test_builder_is_fluent_and_end_returns_designer(self) -> None:
@@ -31,8 +54,12 @@ class PolicyDesignerTests(unittest.TestCase):
 
     def test_state_reuses_existing_builder(self) -> None:
         designer = PolicyDesigner(policy_name="health-policy")
+        first = designer.state("dataset")
+        first.require_columns("id")
+        second = designer.state(" dataset ")
 
-        self.assertIs(designer.state("dataset"), designer.state(" dataset "))
+        self.assertEqual(second.state_id, "dataset")
+        self.assertEqual(len(second.requirements), 1)
 
     def test_names_are_normalized(self) -> None:
         designer = PolicyDesigner(policy_name=" health-policy ")
@@ -68,9 +95,11 @@ class PolicyDesignerTests(unittest.TestCase):
     def test_instances_do_not_have_dicts(self) -> None:
         designer = PolicyDesigner("health-policy")
         builder = designer.state("dataset")
+        segment = builder.segment("adult").when_between("age", 18, 59)
 
         self.assertFalse(hasattr(designer, "__dict__"))
         self.assertFalse(hasattr(builder, "__dict__"))
+        self.assertFalse(hasattr(segment, "__dict__"))
 
     def test_execute_returns_output_path_and_validates_name(self) -> None:
         designer = PolicyDesigner("health-policy")
@@ -112,6 +141,7 @@ class PolicyDesignerTests(unittest.TestCase):
             self.assertEqual(
                 output.read_text(encoding="utf-8"),
                 (
+                    'schema_version: "1.1.0"\n'
                     "policy:\n"
                     '  name: "A10-health-policy"\n'
                     "  states:\n"
@@ -137,7 +167,10 @@ class PolicyDesignerTests(unittest.TestCase):
             self.assertEqual(
                 output.read_text(encoding="utf-8"),
                 (
-                    'policy:\n  name: "health-policy"\n  states: {}\n'
+                    'schema_version: "1.1.0"\n'
+                    'policy:\n'
+                    '  name: "health-policy"\n'
+                    '  states: {}\n'
                 ),
             )
 
@@ -185,6 +218,126 @@ class PolicyDesignerTests(unittest.TestCase):
             designer.execute("../health_policy.yaml")
         with self.assertRaises(ValueError):
             designer.execute("nested/health_policy.yaml")
+
+    def test_multiple_states_and_segments_are_serialized(self) -> None:
+        designer = PolicyDesigner("A10-health-policy")
+        (
+            designer.state("raw_dataset")
+            .require_columns("id", "age", "hba1c")
+            .end()
+            .state("validated_dataset")
+            .segment("adult")
+            .when_between("age", minimum=18, maximum=59)
+            .require_missing_rate("hba1c", maximum=0.05)
+            .require_range("hba1c", minimum=4.0, maximum=14.0)
+            .end()
+            .segment("senior")
+            .when_between("age", minimum=60, maximum=100)
+            .require_missing_rate("hba1c", maximum=0.02)
+            .end()
+            .verify_overlap_range()
+            .end()
+        )
+
+        with TemporaryDirectory() as directory:
+            output = designer.execute(
+                "health_policy.yml",
+                output_dir=directory,
+            )
+            content = output.read_text(encoding="utf-8")
+
+        self.assertLess(
+            content.index('"raw_dataset"'),
+            content.index('"validated_dataset"'),
+        )
+        self.assertLess(
+            content.index('"adult"'),
+            content.index('"senior"'),
+        )
+        self.assertIn('type: "between"', content)
+        self.assertIn('type: "require_missing_rate"', content)
+        self.assertIn('type: "require_range"', content)
+        self.assertIn("maximum: 0.05", content)
+        self.assertIn("minimum: 4.0", content)
+
+    def test_overlap_verification_is_scoped_to_current_state(self) -> None:
+        designer = PolicyDesigner("health-policy")
+        first_state = designer.state("first")
+        (
+            first_state.segment("young")
+            .when_between("age", 10, 20)
+            .end()
+        )
+        first_state.verify_overlap_range()
+
+        second_state = first_state.end().state("second")
+        (
+            second_state.segment("adult")
+            .when_between("age", 15, 30)
+            .end()
+        )
+
+        second_state.verify_overlap_range()
+
+    def test_overlap_verification_rejects_overlapping_segments(self) -> None:
+        state = PolicyDesigner("health-policy").state("dataset")
+        state.segment("first").when_between("age", 10, 20).end()
+        state.segment("second").when_between("age", 15, 30).end()
+
+        with self.assertRaisesRegex(
+            OverlapRangeError,
+            'state "dataset".*segment "first".*segment "second"',
+        ):
+            state.verify_overlap_range()
+
+    def test_overlap_verification_treats_boundaries_as_inclusive(self) -> None:
+        state = PolicyDesigner("health-policy").state("dataset")
+        state.segment("first").when_between("age", 10, 20).end()
+        state.segment("second").when_between("age", 20, 30).end()
+
+        with self.assertRaises(OverlapRangeError):
+            state.verify_overlap_range()
+
+    def test_overlap_verification_groups_ranges_by_column(self) -> None:
+        state = PolicyDesigner("health-policy").state("dataset")
+        state.segment("age").when_between("age", 10, 20).end()
+        state.segment("score").when_between("score", 15, 30).end()
+
+        self.assertIs(state.verify_overlap_range(), state)
+
+    def test_missing_rate_validation(self) -> None:
+        state = PolicyDesigner("health-policy").state("dataset")
+
+        self.assertIs(
+            state.require_missing_rate("hba1c", maximum=0.05),
+            state,
+        )
+        with self.assertRaises(TypeError):
+            state.require_missing_rate("hba1c", maximum=True)
+        with self.assertRaises(ValueError):
+            state.require_missing_rate("hba1c", maximum=1.01)
+
+    def test_range_validation(self) -> None:
+        state = PolicyDesigner("health-policy").state("dataset")
+
+        self.assertIs(
+            state.require_range("age", minimum=18, maximum=100),
+            state,
+        )
+        with self.assertRaises(TypeError):
+            state.require_range("age", minimum=False, maximum=100)
+        with self.assertRaises(ValueError):
+            state.require_range("age", minimum=100, maximum=18)
+
+    def test_segment_requires_a_condition_before_end(self) -> None:
+        segment = (
+            PolicyDesigner("health-policy")
+            .state("dataset")
+            .segment("adult")
+        )
+
+        with self.assertRaisesRegex(ValueError, "requires a condition"):
+            segment.end()
 
 
 if __name__ == "__main__":

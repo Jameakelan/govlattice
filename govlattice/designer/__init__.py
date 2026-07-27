@@ -1,9 +1,11 @@
 from abc import ABC
 from abc import abstractmethod
 from pathlib import Path
+from typing import TYPE_CHECKING
 from typing import Union
 
-from govlattice.builder.expectation_builder import ExpectationBuilder
+if TYPE_CHECKING:
+    from govlattice.builder.state_builder import StateBuilder
 
 
 class Designer(ABC):
@@ -24,7 +26,7 @@ class Designer(ABC):
         return self._policy_name
 
     @abstractmethod
-    def state(self, id: str) -> ExpectationBuilder:
+    def state(self, id: str) -> "StateBuilder":
         pass
 
     @abstractmethod

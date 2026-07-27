@@ -9,7 +9,7 @@ if str(PROJECT_ROOT) not in sys.path:
 from govlattice.designer.policy_designer import PolicyDesigner
 
 
-if __name__ == "__main__":
+def define_single_policy() -> None:
     policy = (
         PolicyDesigner(policy_name="A10-health-policy")
         .state("dataset")
@@ -18,3 +18,29 @@ if __name__ == "__main__":
     )
     
     policy.execute("health_policy.yml")
+
+def define_multiple_states_in_policy() -> None:
+    policy = (
+        PolicyDesigner(policy_name="A10-health-policy")
+        .state("raw_dataset")
+            .require_columns("id", "name", "age", "hba1c")
+        .end()
+        .state("validated_dataset")
+            .segment("adult")
+                .when_between("age", minimum=18, maximum=59)
+                .require_missing_rate("hba1c", maximum=0.05)
+                .require_range("hba1c", minimum=4.0, maximum=14.0)
+            .end()
+            .segment("senior")
+                .when_between("age", minimum=60, maximum=100)
+                .require_missing_rate("hba1c", maximum=0.02)
+                .require_range("hba1c", minimum=4.0, maximum=12.0)
+            .end()
+            .verify_overlap_range()
+        .end()
+    )
+    
+    policy.execute("health_policy.yml")
+
+if __name__ == "__main__":
+    define_multiple_states_in_policy()

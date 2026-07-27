@@ -1,19 +1,21 @@
 from pathlib import Path
 from typing import Union
 
-from govlattice.builder.expectation_builder import ExpectationBuilder
+from govlattice.builder.state_builder import StateBuilder
 from govlattice.builder.yaml_builder import YamlBuilder
 from govlattice.designer import Designer
+from govlattice.nodes.policy_node import PolicyNode
+from govlattice.nodes.state_node import StateNode
 
 
 class PolicyDesigner(Designer):
-    __slots__ = ("_states",)
+    __slots__ = ("_policy",)
 
     def __init__(self, policy_name: str) -> None:
         super().__init__(policy_name)
-        self._states: dict[str, ExpectationBuilder] = {}
+        self._policy = PolicyNode(self.policy_name)
 
-    def state(self, id: str) -> ExpectationBuilder:
+    def state(self, id: str) -> StateBuilder:
         if not isinstance(id, str):
             raise TypeError("state id must be a string")
 
@@ -21,12 +23,11 @@ class PolicyDesigner(Designer):
         if not state_id:
             raise ValueError("state id must not be empty")
 
-        builder = self._states.get(state_id)
-        if builder is None:
-            builder = ExpectationBuilder(self, state_id)
-            self._states[state_id] = builder
-
-        return builder
+        node = self._policy.states.get(state_id)
+        if node is None:
+            node = StateNode(state_id)
+            self._policy.states[state_id] = node
+        return StateBuilder(self, node)
 
     def execute(
         self,
@@ -39,11 +40,7 @@ class PolicyDesigner(Designer):
         if not name:
             raise ValueError("execution name must not be empty")
 
-        states = (
-            (builder.state_id, builder.requirements)
-            for builder in self._states.values()
-        )
-        return YamlBuilder(self.policy_name, states).write(
+        return YamlBuilder(self._policy).write(
             name,
             output_dir=output_dir,
         )
