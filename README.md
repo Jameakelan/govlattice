@@ -42,25 +42,58 @@ print(govlattice.__pack_schema_version__)  # 1.2.0
 
 ## Local Setup
 
-GovLattice does not yet have published-package build configuration. Use the
-repository's virtual environment for local development:
+GovLattice uses `pyproject.toml` for standards-based package installation and
+distribution builds. For local development:
 
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
-python -m pip install -r requirements.txt
+python -m pip install --editable .
 python -m unittest discover -s tests -v
 ```
 
 Install optional Pandas support when evaluating DataFrames:
 
 ```bash
-python -m pip install -r requirements-pandas.txt
+python -m pip install --editable ".[pandas]"
 python -m dev.dev_pandas_adapter
 ```
 
 Run commands from the repository root so Python can resolve the local
 `govlattice` package.
+
+Build the wheel and source distribution locally:
+
+```bash
+python -m pip install build twine
+python -m build
+python -m twine check dist/*
+```
+
+## Production Package Workflow
+
+The `Build production package` GitHub Actions workflow runs on every push to
+the `prod` branch. It:
+
+1. Validates `govlattice/_version.py` as `MAJOR.MINOR.PATCH`.
+2. Requires the version to change from the previous `prod` revision.
+3. Installs the package with Iris/Pandas optional dependencies.
+4. Runs the complete test suite.
+5. Builds both wheel and source distribution.
+6. Validates package metadata.
+7. Installs the built wheel in an isolated environment.
+8. Runs an installed-package schema smoke test outside the repository.
+9. Uploads `govlattice-VERSION` as a versioned workflow artifact.
+
+Before pushing a new production revision, update:
+
+```python
+# govlattice/_version.py
+__version__ = "0.14.0"
+```
+
+The workflow builds and stores artifacts but does not publish to PyPI or
+create a GitHub Release.
 
 ## Samples
 

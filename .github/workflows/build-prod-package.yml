@@ -1,0 +1,155 @@
+name: Build production package
+
+on:
+  push:
+    branches:
+      - prod
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-prod-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Test, build, and verify package
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: |
+            pyproject.toml
+            requirements*.txt
+
+      - name: Validate production version
+        id: version
+        env:
+          BEFORE_SHA: ${{ github.event.before }}
+        run: |
+          python - <<'PY'
+          import os
+          from pathlib import Path
+          import re
+          import subprocess
+
+          pattern = re.compile(
+              r'^__version__ = "'
+              r'(?P<version>(?:0|[1-9]\d*)\.'
+              r'(?:0|[1-9]\d*)\.'
+              r'(?:0|[1-9]\d*))"$',
+              re.MULTILINE,
+          )
+
+          current_text = Path(
+              "govlattice/_version.py"
+          ).read_text(encoding="utf-8")
+          current_match = pattern.search(current_text)
+          if current_match is None:
+              raise SystemExit(
+                  "govlattice/_version.py must contain a SemVer "
+                  '__version__ = "MAJOR.MINOR.PATCH" assignment'
+              )
+          current = current_match.group("version")
+
+          before = os.environ.get("BEFORE_SHA", "")
+          if before and set(before) != {"0"}:
+              previous_text = subprocess.check_output(
+                  [
+                      "git",
+                      "show",
+                      f"{before}:govlattice/_version.py",
+                  ],
+                  text=True,
+              )
+              previous_match = pattern.search(previous_text)
+              if previous_match is None:
+                  raise SystemExit(
+                      "the previous prod revision has no valid "
+                      "package version"
+                  )
+              previous = previous_match.group("version")
+              if current == previous:
+                  raise SystemExit(
+                      "a push to prod must increment "
+                      f"govlattice.__version__; still {current}"
+                  )
+
+          with open(
+              os.environ["GITHUB_OUTPUT"],
+              "a",
+              encoding="utf-8",
+          ) as output:
+              output.write(f"version={current}\n")
+          print(f"Building GovLattice {current}")
+          PY
+
+      - name: Install build and test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install build twine
+          python -m pip install --editable ".[iris]"
+
+      - name: Run tests
+        run: python -m unittest discover -s tests -v
+
+      - name: Build wheel and source distribution
+        run: python -m build
+
+      - name: Validate distribution metadata
+        run: python -m twine check dist/*
+
+      - name: Install and smoke-test built wheel
+        env:
+          EXPECTED_VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          python -m venv /tmp/govlattice-wheel-smoke
+          /tmp/govlattice-wheel-smoke/bin/python -m pip \
+            install dist/*.whl
+          cd /tmp
+          /tmp/govlattice-wheel-smoke/bin/python - <<'PY'
+          import os
+          from pathlib import Path
+          from tempfile import TemporaryDirectory
+
+          import govlattice
+
+          expected = os.environ["EXPECTED_VERSION"]
+          if govlattice.__version__ != expected:
+              raise SystemExit(
+                  "installed version mismatch: "
+                  f"{govlattice.__version__} != {expected}"
+              )
+
+          with TemporaryDirectory() as directory:
+              path = (
+                  govlattice.PolicyDesigner("wheel-smoke")
+                  .state("dataset")
+                  .require_columns("id")
+                  .end()
+                  .execute("policy.yml", output_dir=directory)
+              )
+              policy = govlattice.PolicyReader.read(Path(path))
+              if policy.name != "wheel-smoke":
+                  raise SystemExit("installed schema smoke test failed")
+
+          print(f"Installed GovLattice {expected} successfully")
+          PY
+
+      - name: Upload versioned distributions
+        uses: actions/upload-artifact@v7
+        with:
+          name: govlattice-${{ steps.version.outputs.version }}
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 30

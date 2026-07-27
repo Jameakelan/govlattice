@@ -1,4 +1,5 @@
-__version__ = "0.13.0"
+from govlattice._version import __version__
+
 __schema_version__ = "1.6.0"
 __pack_schema_version__ = "1.2.0"
 

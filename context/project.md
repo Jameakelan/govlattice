@@ -52,6 +52,10 @@ When a serialized contract changes in a way that affects consumers, update the
 corresponding schema version, JSON Schema, builders, examples, and tests
 together.
 
+`govlattice/_version.py` is the authoritative package-version source.
+`govlattice.__version__` re-exports it. `pyproject.toml` reads the same value
+for wheel and source-distribution metadata.
+
 ## 3. Public API
 
 The package root exports:
@@ -1005,6 +1009,7 @@ Directory responsibilities:
 ```text
 govlattice/
 ├── __init__.py          Public exports and version constants
+├── _version.py          Authoritative package version
 ├── enum/
 │   ├── actor_type.py          ActorType enum
 │   ├── comparison.py          ComparisonOperator enum
@@ -1061,6 +1066,8 @@ dev/                      Executable usage examples
 tests/                    unittest test suite
 policies/                 Generated output; ignored by Git
 context/project.md        This project-wide reference
+.github/workflows/        Production package automation
+pyproject.toml            Build metadata and dependency declarations
 ```
 
 Responsibility boundaries:
@@ -1222,6 +1229,17 @@ The Iris sample installs the Pandas dependency set plus:
 scikit-learn>=1.4,<2
 ```
 
+### Production package workflow
+
+Pushes to `prod` run `.github/workflows/build-prod-package.yml`. The workflow
+requires a SemVer package-version change after the branch's first push, runs
+the full test suite, builds wheel and source distributions, validates metadata,
+installs the wheel in an isolated environment, verifies packaged JSON Schemas,
+and uploads a `govlattice-VERSION` artifact for 30 days.
+
+The workflow does not publish to PyPI, create a Git tag, or create a GitHub
+Release. Those remain explicit release actions.
+
 ## 17. Testing Expectations
 
 The project uses the standard-library `unittest` framework.
@@ -1271,7 +1289,6 @@ available:
 - Per-metric operators in `require_metrics()`.
 - Pack dependency resolution or a policy reuse registry.
 - A command-line interface.
-- Published-package build configuration.
 
 These are extension candidates only. Discuss their public APIs and serialized
 contracts before changing the project structure or schemas.

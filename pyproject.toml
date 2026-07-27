@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=77", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "govlattice"
+dynamic = ["version"]
+description = "Define, verify, and enforce governance and quality policies."
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+    "jsonschema>=4.0,<5",
+    "PyYAML>=6.0,<7",
+]
+
+[project.optional-dependencies]
+pandas = [
+    "pandas>=2.0,<4",
+]
+iris = [
+    "pandas>=2.0,<4",
+    "scikit-learn>=1.4,<2",
+]
+
+[project.urls]
+Repository = "https://github.com/Jameakelan/govlattice"
+
+[tool.setuptools.dynamic]
+version = {attr = "govlattice._version.__version__"}
+
+[tool.setuptools.packages.find]
+include = ["govlattice*", "schemas*"]
+
+[tool.setuptools.package-data]
+schemas = ["*.json"]
