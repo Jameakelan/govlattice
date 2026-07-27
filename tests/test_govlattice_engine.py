@@ -12,6 +12,7 @@ from govlattice import EvaluationStatus
 from govlattice import ExecutionContext
 from govlattice import GovLatticeEngine
 from govlattice import PolicyDesigner
+from govlattice import PolicyEnforcementError
 from govlattice import PolicyReader
 from govlattice import RecordsDatasetAdapter
 from govlattice import RequirementDefinition
@@ -54,6 +55,21 @@ class _ReplacementEvaluator:
             expected=requirement.parameters,
             observed={},
             message="replacement evaluator failed",
+        )
+
+
+class _CountingFailEvaluator:
+    requirement_type = "require_counting"
+
+    def __init__(self):
+        self.call_count = 0
+
+    def evaluate(self, requirement, context):
+        self.call_count += 1
+        return RequirementEvaluation.failed(
+            expected=requirement.parameters,
+            observed={"row_count": context.dataset.row_count},
+            message="counting requirement failed",
         )
 
 
@@ -418,6 +434,151 @@ class GovLatticeEngineTests(unittest.TestCase):
             GovLatticeEngine().register_evaluator(
                 "require_other",
                 _ContextAwareEvaluator(),
+            )
+
+    def test_enforce_returns_result_when_policy_passes(self) -> None:
+        policy = self._read_policy(
+            PolicyDesigner("passing-policy")
+            .state("dataset")
+            .require_columns("id")
+            .end()
+        )
+
+        result = GovLatticeEngine().enforce(
+            policy,
+            state="dataset",
+            context=EvaluationContext(
+                RecordsDatasetAdapter([{"id": 1}]),
+                execution=ExecutionContext(run_id="run-enforce"),
+            ),
+        )
+
+        self.assertEqual(result.status, EvaluationStatus.PASSED)
+        self.assertEqual(result.execution.run_id, "run-enforce")
+
+    def test_enforce_blocks_failed_policy_with_complete_result(
+        self,
+    ) -> None:
+        policy = self._read_policy(
+            PolicyDesigner("failing-policy")
+            .state("dataset")
+            .require_columns("id", "email")
+            .end()
+        )
+
+        with self.assertRaises(PolicyEnforcementError) as raised:
+            GovLatticeEngine().enforce(
+                policy,
+                state="dataset",
+                context=EvaluationContext(
+                    RecordsDatasetAdapter([{"id": 1}])
+                ),
+            )
+
+        error = raised.exception
+        self.assertEqual(
+            error.result.status,
+            EvaluationStatus.FAILED,
+        )
+        self.assertEqual(error.result.failed_count, 1)
+        self.assertEqual(len(error.result.findings), 1)
+        self.assertIn("failing-policy", str(error))
+
+    def test_enforce_fails_closed_when_verification_errors(
+        self,
+    ) -> None:
+        policy = self._read_policy(
+            PolicyDesigner("error-policy")
+            .state("evaluation")
+            .require_metric("recall", 0.8)
+            .end()
+        )
+
+        with self.assertRaises(PolicyEnforcementError) as raised:
+            GovLatticeEngine().enforce(
+                policy,
+                state="evaluation",
+                context=EvaluationContext(
+                    RecordsDatasetAdapter([{"id": 1}])
+                ),
+            )
+
+        self.assertEqual(
+            raised.exception.result.status,
+            EvaluationStatus.ERROR,
+        )
+        self.assertEqual(raised.exception.result.error_count, 1)
+
+    def test_enforce_allows_disabled_policy_to_skip(self) -> None:
+        policy = self._read_policy(
+            PolicyDesigner("disabled-policy", enabled=False)
+            .state("dataset")
+            .require_columns("id")
+            .end()
+        )
+
+        result = GovLatticeEngine().enforce(
+            policy,
+            state="dataset",
+            context=EvaluationContext(
+                RecordsDatasetAdapter([{"id": 1}])
+            ),
+        )
+
+        self.assertEqual(result.status, EvaluationStatus.SKIPPED)
+        self.assertEqual(
+            result.skip_reason,
+            SkipReason.POLICY_DISABLED,
+        )
+
+    def test_enforce_evaluates_each_requirement_once(self) -> None:
+        policy = self._read_policy(
+            PolicyDesigner("counting-policy").state("dataset").end()
+        )
+        custom_requirement = RequirementDefinition(
+            type="require_counting",
+            parameters=MappingProxyType({}),
+        )
+        policy = replace(
+            policy,
+            states=MappingProxyType(
+                {
+                    "dataset": StateDefinition(
+                        id="dataset",
+                        requirements=(custom_requirement,),
+                        segments=MappingProxyType({}),
+                    )
+                }
+            ),
+        )
+        evaluator = _CountingFailEvaluator()
+        engine = GovLatticeEngine().register_evaluator(evaluator)
+
+        with self.assertRaises(PolicyEnforcementError):
+            engine.enforce(
+                policy,
+                state="dataset",
+                context=EvaluationContext(
+                    RecordsDatasetAdapter([{"id": 1}])
+                ),
+            )
+
+        self.assertEqual(evaluator.call_count, 1)
+
+    def test_enforce_preserves_unknown_state_usage_error(
+        self,
+    ) -> None:
+        policy = self._read_policy(
+            PolicyDesigner("state-policy").state("dataset").end()
+        )
+
+        with self.assertRaises(UnknownPolicyStateError):
+            GovLatticeEngine().enforce(
+                policy,
+                state="unknown",
+                context=EvaluationContext(
+                    RecordsDatasetAdapter([{"id": 1}])
+                ),
             )
 
 

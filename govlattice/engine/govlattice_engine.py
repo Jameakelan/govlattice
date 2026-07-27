@@ -6,6 +6,7 @@ from typing import Any
 
 from govlattice.enum import EvaluationStatus
 from govlattice.enum import SkipReason
+from govlattice.error import PolicyEnforcementError
 from govlattice.error import UnknownPolicyStateError
 from govlattice.evaluator import EvaluatorRegistry
 from govlattice.evaluator import RequirementEvaluator
@@ -187,6 +188,22 @@ class GovLatticeEngine:
             duration_ms=duration_ms,
             skip_reason=result_skip_reason,
         )
+
+    def enforce(
+        self,
+        policy: PolicyDefinition,
+        *,
+        state: str,
+        context: EvaluationContext,
+    ) -> PolicyEvaluationResult:
+        result = self.verify(
+            policy,
+            state=state,
+            context=context,
+        )
+        if not result.is_compliant:
+            raise PolicyEnforcementError(result)
+        return result
 
     def _evaluate_requirements(
         self,

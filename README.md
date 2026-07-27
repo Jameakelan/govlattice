@@ -8,8 +8,8 @@ conditional segments, lifecycle metadata, external references, and reusable
 policy packs. The generated YAML is designed for Git-based review and sharing
 across teams.
 
-> GovLattice can verify policies against record-based datasets. Enforcement
-> and native Pandas, Polars, Spark, or SQL adapters are not implemented yet.
+> GovLattice can verify and enforce policies against record-based datasets.
+> Native Pandas, Polars, Spark, or SQL adapters are not implemented yet.
 
 ## Features
 
@@ -25,6 +25,7 @@ across teams.
 - Safe, schema-validated policy reading
 - Policy verification with immutable audit results
 - Adapter-based datasets and optional actor provenance
+- Workflow-blocking enforcement with complete audit results
 - Deterministic YAML with atomic file writes
 - JSON Schemas for policy and pack output
 
@@ -33,7 +34,7 @@ across teams.
 ```python
 import govlattice
 
-print(govlattice.__version__)              # 0.10.0
+print(govlattice.__version__)              # 0.11.0
 print(govlattice.__schema_version__)       # 1.6.0
 print(govlattice.__pack_schema_version__)  # 1.2.0
 ```
@@ -542,8 +543,28 @@ metrics, and execution information. Duplicate requirement types are rejected
 unless registration explicitly uses `replace=True`. The former
 `register_evaluator(requirement_type, evaluator)` API remains supported.
 
-`enforce()` is intentionally not implemented yet. The current `verify()`
-semantics should be reviewed before enforcement behavior is added.
+Use `enforce()` at a workflow boundary when non-compliance must stop further
+execution:
+
+```python
+from govlattice import PolicyEnforcementError
+
+try:
+    result = engine.enforce(
+        policy,
+        state="validated_dataset",
+        context=context,
+    )
+except PolicyEnforcementError as error:
+    print(error.result.status)
+    print(error.result.findings)
+    raise
+```
+
+`enforce()` reuses the complete `verify()` report. It returns the result for
+`PASSED` and `SKIPPED`, raises `PolicyEnforcementError` for `FAILED`, and
+fails closed by raising the same exception for `ERROR`. The exception exposes
+the immutable evaluation result through `error.result`.
 
 ## YAML Output
 

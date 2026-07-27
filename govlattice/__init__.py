@@ -1,4 +1,4 @@
-__version__ = "0.10.0"
+__version__ = "0.11.0"
 __schema_version__ = "1.6.0"
 __pack_schema_version__ = "1.2.0"
 
@@ -12,6 +12,7 @@ from govlattice.enum import SeverityLevel
 from govlattice.enum import SkipReason
 from govlattice.error import GovLatticeEngineError
 from govlattice.error import PolicyFileError
+from govlattice.error import PolicyEnforcementError
 from govlattice.error import PolicyPackConsistencyError
 from govlattice.error import PolicyPackFileError
 from govlattice.error import PolicyPackReadError
@@ -64,6 +65,7 @@ __all__ = [
     "PolicyDefinition",
     "PolicyDesigner",
     "PolicyEvaluationResult",
+    "PolicyEnforcementError",
     "PolicyFileError",
     "PolicyPackConsistencyError",
     "PolicyPackDefinition",

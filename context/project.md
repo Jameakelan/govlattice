@@ -24,10 +24,11 @@ The current system can:
 - Export policies and packs as deterministic YAML.
 - Safely read and validate exported policy YAML.
 - Validate inputs before writing files.
+- Verify policies and enforce workflow boundaries.
 
-GovLattice currently defines, exports, reads, and verifies policies against
-record-based datasets. Enforcement and native dataframe/database adapters are
-not implemented yet.
+GovLattice currently defines, exports, reads, verifies, and enforces policies
+against record-based datasets. Native dataframe/database adapters are not
+implemented yet.
 
 ## 2. Current Versions
 
@@ -36,7 +37,7 @@ The package root exposes three version constants:
 ```python
 import govlattice
 
-govlattice.__version__              # "0.10.0"
+govlattice.__version__              # "0.11.0"
 govlattice.__schema_version__       # "1.6.0"
 govlattice.__pack_schema_version__  # "1.2.0"
 ```
@@ -943,12 +944,14 @@ GovLattice does not verify the actor's identity or roles.
 custom metadata. Evaluation results preserve this immutable snapshot together
 with generated start/completion timestamps and duration.
 
-### Verify before enforce
+### Verify and enforce share one evaluation path
 
-Only `verify()` is implemented. `enforce()` remains intentionally deferred
-until verification results and semantics have been reviewed. The intended
-future behavior is to reuse the same evaluation pipeline and block on
-`FAILED` or `ERROR`.
+`verify()` always returns the complete immutable evaluation result.
+`enforce()` calls `verify()` exactly once and returns that result for
+`PASSED` or `SKIPPED`. It raises `PolicyEnforcementError` for `FAILED` or
+`ERROR`, so enforcement fails closed when compliance cannot be established.
+The exception exposes the same result through `error.result`; requirement
+evaluation is never duplicated.
 
 ## 14. Architecture and Responsibilities
 
@@ -1213,7 +1216,6 @@ output, not source code.
 The following features are not implemented and must not be presented as
 available:
 
-- Policy enforcement that blocks a workflow.
 - Direct evaluation of a `PolicyPackDefinition`.
 - Native Pandas, Polars, Spark, and SQL adapters.
 - Reading older policy schemas through migrations.
