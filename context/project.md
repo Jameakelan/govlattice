@@ -1235,10 +1235,10 @@ Pushes to `prod` run `.github/workflows/build-prod-package.yml`. The workflow
 requires a SemVer package-version change after the branch's first push, runs
 the full test suite, builds wheel and source distributions, validates metadata,
 installs the wheel in an isolated environment, verifies packaged JSON Schemas,
-and uploads a `govlattice-VERSION` artifact for 30 days.
+uploads a `govlattice-VERSION` artifact for 30 days, then creates tag
+`vVERSION` and a GitHub Release containing both distributions.
 
-The workflow does not publish to PyPI, create a Git tag, or create a GitHub
-Release. Those remain explicit release actions.
+The workflow rejects an existing release tag and does not publish to PyPI.
 
 ## 17. Testing Expectations
 
