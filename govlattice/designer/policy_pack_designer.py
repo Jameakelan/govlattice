@@ -1,6 +1,7 @@
 from pathlib import Path
 import re
 from typing import Any
+from typing import Optional
 from typing import Sequence
 from typing import Union
 
@@ -29,6 +30,7 @@ class PolicyPackDesigner:
         name: str,
         version: str,
         *,
+        purpose: Optional[str] = None,
         enabled: bool = True,
         jurisdiction: Sequence[str] = (),
         tags: Sequence[str] = (),
@@ -38,11 +40,16 @@ class PolicyPackDesigner:
             pack_id=pack_id,
             name=name,
             version=version,
+            purpose=purpose,
             enabled=enabled,
             jurisdiction=jurisdiction,
             tags=tags,
             metadata=metadata,
         )
+
+    @property
+    def purpose(self) -> Optional[str]:
+        return self._pack.purpose
 
     def add_policy(
         self,

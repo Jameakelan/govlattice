@@ -1,7 +1,10 @@
 from numbers import Real
 from typing import Any
+from typing import Optional
 from typing import Sequence
 from typing import Union
+
+from govlattice.comparison import ComparisonOperator
 
 
 Number = Union[int, float]
@@ -78,13 +81,34 @@ class RequirementNode:
     def metric(
         cls,
         metric: str,
-        minimum: Number,
+        value: Optional[Number] = None,
+        *,
+        operator: ComparisonOperator = ComparisonOperator.GTE,
+        minimum: Optional[Number] = None,
     ) -> "RequirementNode":
+        value = cls._resolve_metric_value(value, minimum)
         return cls(
             "require_metric",
             {
                 "metric": cls._validate_metric(metric),
-                "minimum": cls._validate_score(minimum),
+                "operator": cls._validate_operator(operator).value,
+                "value": cls._validate_score(value),
+            },
+        )
+
+    @classmethod
+    def column_value(
+        cls,
+        column: str,
+        value: Number,
+        operator: ComparisonOperator,
+    ) -> "RequirementNode":
+        return cls(
+            "require_column_value",
+            {
+                "column": cls._validate_column(column),
+                "operator": cls._validate_operator(operator).value,
+                "value": cls._validate_number("value", value),
             },
         )
 
@@ -158,6 +182,27 @@ class RequirementNode:
         if value < 0 or value > 1:
             raise ValueError("minimum score must be between 0 and 1")
         return value
+
+    @staticmethod
+    def _resolve_metric_value(
+        value: Optional[Number],
+        minimum: Optional[Number],
+    ) -> Number:
+        if value is not None and minimum is not None:
+            raise ValueError("use either value or minimum, not both")
+        if value is None and minimum is None:
+            raise TypeError("metric value is required")
+        return minimum if value is None else value
+
+    @staticmethod
+    def _validate_operator(
+        operator: ComparisonOperator,
+    ) -> ComparisonOperator:
+        if not isinstance(operator, ComparisonOperator):
+            raise TypeError(
+                "operator must be a ComparisonOperator"
+            )
+        return operator
 
     @staticmethod
     def _validate_number(name: str, value: Number) -> Number:

@@ -1,8 +1,10 @@
 from typing import TYPE_CHECKING
+from typing import Optional
 from typing import Sequence
 
 from govlattice.builder import Builder
 from govlattice.builder.segment_builder import SegmentBuilder
+from govlattice.comparison import ComparisonOperator
 from govlattice.nodes.requirement_node import Number
 from govlattice.nodes.requirement_node import RequirementNode
 from govlattice.nodes.segment_node import SegmentNode
@@ -76,10 +78,30 @@ class StateBuilder(Builder):
     def require_metric(
         self,
         metric: str,
-        minimum: Number,
+        value: Optional[Number] = None,
+        *,
+        operator: ComparisonOperator = ComparisonOperator.GTE,
+        minimum: Optional[Number] = None,
     ) -> "StateBuilder":
         self._node.requirements.append(
-            RequirementNode.metric(metric, minimum)
+            RequirementNode.metric(
+                metric,
+                value,
+                operator=operator,
+                minimum=minimum,
+            )
+        )
+        return self
+
+    def require_column_value(
+        self,
+        column: str,
+        value: Number,
+        *,
+        operator: ComparisonOperator,
+    ) -> "StateBuilder":
+        self._node.requirements.append(
+            RequirementNode.column_value(column, value, operator)
         )
         return self
 

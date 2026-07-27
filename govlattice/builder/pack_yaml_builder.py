@@ -24,8 +24,15 @@ class PackYamlBuilder:
             f"  id: {self._scalar(self._pack.id)}",
             f"  name: {self._scalar(self._pack.name)}",
             f"  version: {self._scalar(self._pack.version)}",
-            f"  enabled: {self._scalar(self._pack.enabled)}",
         ]
+        if self._pack.purpose is not None:
+            self._append_named_value(
+                lines,
+                "purpose",
+                self._pack.purpose,
+                indent=2,
+            )
+        lines.append(f"  enabled: {self._scalar(self._pack.enabled)}")
         self._append_named_value(
             lines,
             "jurisdiction",

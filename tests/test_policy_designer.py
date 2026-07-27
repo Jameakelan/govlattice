@@ -5,6 +5,7 @@ from tempfile import TemporaryDirectory
 import unittest
 
 import govlattice
+from govlattice import ComparisonOperator
 from govlattice import PolicyReference
 from govlattice import SeverityLevel
 from govlattice.designer.policy_designer import PolicyDesigner
@@ -13,9 +14,9 @@ from govlattice.verifier.range_overlap_verifier import OverlapRangeError
 
 class PolicyDesignerTests(unittest.TestCase):
     def test_public_versions(self) -> None:
-        self.assertEqual(govlattice.__version__, "0.5.0")
-        self.assertEqual(govlattice.__schema_version__, "1.4.0")
-        self.assertEqual(govlattice.__pack_schema_version__, "1.0.0")
+        self.assertEqual(govlattice.__version__, "0.7.0")
+        self.assertEqual(govlattice.__schema_version__, "1.6.0")
+        self.assertEqual(govlattice.__pack_schema_version__, "1.2.0")
 
     def test_json_schema_uses_public_schema_version(self) -> None:
         schema_path = (
@@ -144,7 +145,7 @@ class PolicyDesignerTests(unittest.TestCase):
             self.assertEqual(
                 output.read_text(encoding="utf-8"),
                 (
-                    'schema_version: "1.4.0"\n'
+                    'schema_version: "1.6.0"\n'
                     "policy:\n"
                     '  name: "A10-health-policy"\n'
                     "  enabled: true\n"
@@ -175,7 +176,7 @@ class PolicyDesignerTests(unittest.TestCase):
             self.assertEqual(
                 output.read_text(encoding="utf-8"),
                 (
-                    'schema_version: "1.4.0"\n'
+                    'schema_version: "1.6.0"\n'
                     'policy:\n'
                     '  name: "health-policy"\n'
                     '  enabled: true\n'
@@ -398,7 +399,7 @@ class PolicyDesignerTests(unittest.TestCase):
         self.assertEqual(
             content,
             (
-                'schema_version: "1.4.0"\n'
+                'schema_version: "1.6.0"\n'
                 "policy:\n"
                 '  name: "health-policy"\n'
                 "  enabled: false\n"
@@ -455,6 +456,44 @@ class PolicyDesignerTests(unittest.TestCase):
                 custom=float("nan"),
             )
 
+    def test_optional_policy_purpose(self) -> None:
+        without_purpose = PolicyDesigner("without-purpose")
+        with_purpose = PolicyDesigner(
+            "with-purpose",
+            purpose="  Ensure reliable health data.  ",
+        )
+
+        self.assertIsNone(without_purpose.purpose)
+        self.assertEqual(
+            with_purpose.purpose,
+            "Ensure reliable health data.",
+        )
+
+        with TemporaryDirectory() as directory:
+            without_content = without_purpose.execute(
+                "without.yml",
+                output_dir=directory,
+            ).read_text(encoding="utf-8")
+            with_content = with_purpose.execute(
+                "with.yml",
+                output_dir=directory,
+            ).read_text(encoding="utf-8")
+
+        self.assertNotIn("purpose:", without_content)
+        self.assertIn(
+            '  purpose: "Ensure reliable health data."\n',
+            with_content,
+        )
+
+    def test_policy_purpose_validation(self) -> None:
+        with self.assertRaises(TypeError):
+            PolicyDesigner(
+                "health-policy",
+                purpose=123,  # type: ignore[arg-type]
+            )
+        with self.assertRaises(ValueError):
+            PolicyDesigner("health-policy", purpose=" ")
+
     def test_severity_lifecycle_and_references(self) -> None:
         reference = PolicyReference(
             "Official regulation",
@@ -507,6 +546,16 @@ class PolicyDesignerTests(unittest.TestCase):
             PolicyDesigner("model-quality")
             .state("evaluation")
             .require_metric("recall", 0.8)
+            .require_metric(
+                "false_positive_rate",
+                0.1,
+                operator=ComparisonOperator.LTE,
+            )
+            .require_column_value(
+                "age",
+                18,
+                operator=ComparisonOperator.GTE,
+            )
             .require_metrics(
                 ("precision", "f1_score"),
                 (0.5, 0.8),
@@ -522,7 +571,14 @@ class PolicyDesignerTests(unittest.TestCase):
 
         self.assertIn('type: "require_metric"', content)
         self.assertIn('metric: "recall"', content)
-        self.assertIn("minimum: 0.8", content)
+        self.assertIn('operator: ">="', content)
+        self.assertIn("value: 0.8", content)
+        self.assertIn('metric: "false_positive_rate"', content)
+        self.assertIn('operator: "<="', content)
+        self.assertIn("value: 0.1", content)
+        self.assertIn('type: "require_column_value"', content)
+        self.assertIn('column: "age"', content)
+        self.assertIn("value: 18", content)
         self.assertIn('type: "require_metrics"', content)
         self.assertIn("metrics:", content)
         self.assertIn("precision: 0.5", content)
@@ -531,6 +587,10 @@ class PolicyDesignerTests(unittest.TestCase):
     def test_metric_requirement_validation(self) -> None:
         state = PolicyDesigner("model-quality").state("evaluation")
 
+        self.assertIs(
+            state.require_metric("recall", minimum=0.8),
+            state,
+        )
         with self.assertRaises(TypeError):
             state.require_metric("recall", True)
         with self.assertRaises(ValueError):
@@ -544,6 +604,46 @@ class PolicyDesignerTests(unittest.TestCase):
             )
         with self.assertRaises(TypeError):
             state.require_metrics("recall", (0.8,))
+        with self.assertRaises(TypeError):
+            state.require_metric(
+                "recall",
+                0.8,
+                operator=">=",  # type: ignore[arg-type]
+            )
+        with self.assertRaises(ValueError):
+            state.require_metric(
+                "recall",
+                0.8,
+                minimum=0.7,
+            )
+        with self.assertRaises(TypeError):
+            state.require_metric("recall")
+
+    def test_column_value_requirement_validation(self) -> None:
+        state = PolicyDesigner("data-quality").state("dataset")
+
+        for operator in ComparisonOperator:
+            self.assertIs(
+                state.require_column_value(
+                    "age",
+                    18,
+                    operator=operator,
+                ),
+                state,
+            )
+
+        with self.assertRaises(TypeError):
+            state.require_column_value(
+                "age",
+                18,
+                operator=">=",  # type: ignore[arg-type]
+            )
+        with self.assertRaises(TypeError):
+            state.require_column_value(
+                "age",
+                True,
+                operator=ComparisonOperator.GTE,
+            )
 
 
 if __name__ == "__main__":

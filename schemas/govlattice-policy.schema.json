@@ -12,7 +12,7 @@
   "properties": {
     "schema_version": {
       "type": "string",
-      "const": "1.4.0"
+      "const": "1.6.0"
     },
     "policy": {
       "type": "object",
@@ -35,6 +35,10 @@
       },
       "properties": {
         "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "purpose": {
           "type": "string",
           "minLength": 1
         },
@@ -213,6 +217,9 @@
           "$ref": "#/$defs/metric_requirement"
         },
         {
+          "$ref": "#/$defs/column_value_requirement"
+        },
+        {
           "$ref": "#/$defs/metrics_requirement"
         }
       ]
@@ -295,7 +302,8 @@
       "required": [
         "type",
         "metric",
-        "minimum"
+        "operator",
+        "value"
       ],
       "additionalProperties": false,
       "properties": {
@@ -306,12 +314,48 @@
           "type": "string",
           "minLength": 1
         },
-        "minimum": {
+        "operator": {
+          "$ref": "#/$defs/comparison_operator"
+        },
+        "value": {
           "type": "number",
           "minimum": 0,
           "maximum": 1
         }
       }
+    },
+    "column_value_requirement": {
+      "type": "object",
+      "required": [
+        "type",
+        "column",
+        "operator",
+        "value"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "require_column_value"
+        },
+        "column": {
+          "type": "string",
+          "minLength": 1
+        },
+        "operator": {
+          "$ref": "#/$defs/comparison_operator"
+        },
+        "value": {
+          "type": "number"
+        }
+      }
+    },
+    "comparison_operator": {
+      "enum": [
+        "<",
+        "<=",
+        ">",
+        ">="
+      ]
     },
     "metrics_requirement": {
       "type": "object",

@@ -1,6 +1,7 @@
 import re
 from typing import Any
 from typing import Mapping
+from typing import Optional
 from typing import Sequence
 
 from govlattice.nodes.policy_node import PolicyNode
@@ -12,6 +13,7 @@ class PolicyPackNode:
         "id",
         "name",
         "version",
+        "purpose",
         "enabled",
         "jurisdiction",
         "tags",
@@ -24,6 +26,7 @@ class PolicyPackNode:
         pack_id: str,
         name: str,
         version: str,
+        purpose: Optional[str],
         enabled: bool,
         jurisdiction: Sequence[str],
         tags: Sequence[str],
@@ -32,6 +35,10 @@ class PolicyPackNode:
         self.id = self._validate_id(pack_id)
         self.name = self._validate_text("pack name", name)
         self.version = self._validate_text("pack version", version)
+        self.purpose = PolicyNode._validate_optional_text(
+            "purpose",
+            purpose,
+        )
         self.enabled = PolicyNode._validate_enabled(enabled)
         self.jurisdiction = PolicyNode._validate_string_sequence(
             "jurisdiction",
@@ -68,6 +75,7 @@ class PolicyPackNode:
             "id",
             "name",
             "version",
+            "purpose",
             "enabled",
             "jurisdiction",
             "tags",

@@ -7,6 +7,7 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from govlattice.designer.policy_designer import PolicyDesigner
+from govlattice import ComparisonOperator
 
 
 def define_single_policy() -> None:
@@ -23,6 +24,10 @@ def define_multiple_states_in_policy() -> None:
     policy = (
         PolicyDesigner(
             policy_name="A10-health-policy",
+            purpose=(
+                "Ensure health datasets meet defined quality "
+                "requirements."
+            ),
             enabled=True,
             tags=("health", "integration-test"),
             created_at="2026-07-01T09:00:00+07:00",
@@ -40,6 +45,16 @@ def define_multiple_states_in_policy() -> None:
                 .require_missing_rate("hba1c", maximum=0.05)
                 .require_range("hba1c", minimum=4.0, maximum=14.0)
                 .require_metric("recall", 0.8)
+                .require_metric(
+                    "false_positive_rate",
+                    0.1,
+                    operator=ComparisonOperator.LTE,
+                )
+                .require_column_value(
+                    "age",
+                    18,
+                    operator=ComparisonOperator.GTE,
+                )
                 .require_metrics(
                     ("precision", "f1_score"),
                     (0.75, 0.8),

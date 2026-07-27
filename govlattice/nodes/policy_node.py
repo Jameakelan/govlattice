@@ -13,6 +13,7 @@ from govlattice.severity import SeverityLevel
 class PolicyNode:
     __slots__ = (
         "name",
+        "purpose",
         "enabled",
         "severity",
         "tags",
@@ -27,6 +28,7 @@ class PolicyNode:
     def __init__(
         self,
         name: str,
+        purpose: Optional[str],
         enabled: bool,
         severity: SeverityLevel,
         tags: Sequence[str],
@@ -37,6 +39,7 @@ class PolicyNode:
         metadata: Mapping[str, Any],
     ) -> None:
         self.name = name
+        self.purpose = self._validate_optional_text("purpose", purpose)
         self.enabled = self._validate_enabled(enabled)
         self.severity = self._validate_severity(severity)
         self.tags = self._validate_string_sequence("tags", tags)
@@ -62,6 +65,20 @@ class PolicyNode:
         if type(enabled) is not bool:
             raise TypeError("enabled must be a boolean")
         return enabled
+
+    @staticmethod
+    def _validate_optional_text(
+        name: str,
+        value: Optional[str],
+    ) -> Optional[str]:
+        if value is None:
+            return None
+        if not isinstance(value, str):
+            raise TypeError(f"{name} must be a string")
+        value = value.strip()
+        if not value:
+            raise ValueError(f"{name} must not be empty")
+        return value
 
     @staticmethod
     def _validate_severity(
@@ -176,6 +193,7 @@ class PolicyNode:
     ) -> dict[str, Any]:
         reserved = {
             "name",
+            "purpose",
             "enabled",
             "severity",
             "tags",

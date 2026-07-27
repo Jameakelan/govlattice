@@ -42,6 +42,7 @@ class PolicyPackDesignerTests(unittest.TestCase):
                 pack_id="eu-ai-act",
                 name="EU AI Act",
                 version="1.0.0",
+                purpose="Govern AI systems under the EU AI Act.",
                 jurisdiction=("EU",),
                 tags=("regulatory",),
                 framework="Regulation (EU) 2024/1689",
@@ -90,12 +91,67 @@ class PolicyPackDesignerTests(unittest.TestCase):
                 ).is_file()
             )
 
-        self.assertIn('pack_schema_version: "1.0.0"', content)
+        self.assertIn('pack_schema_version: "1.2.0"', content)
         self.assertIn('id: "eu-ai-act"', content)
+        self.assertIn(
+            'purpose: "Govern AI systems under the EU AI Act."',
+            content,
+        )
         self.assertIn('framework: "Regulation (EU) 2024/1689"', content)
         self.assertIn('file: "policies/data-governance.yml"', content)
         self.assertIn('severity: "critical"', content)
-        self.assertIn('schema_version: "1.4.0"', content)
+        self.assertIn('schema_version: "1.6.0"', content)
+
+    def test_optional_pack_purpose(self) -> None:
+        without_purpose = PolicyPackDesigner(
+            "without-purpose",
+            "Without Purpose",
+            "1.0.0",
+        )
+        with_purpose = PolicyPackDesigner(
+            "with-purpose",
+            "With Purpose",
+            "1.0.0",
+            purpose="  Group health governance policies.  ",
+        )
+
+        self.assertIsNone(without_purpose.purpose)
+        self.assertEqual(
+            with_purpose.purpose,
+            "Group health governance policies.",
+        )
+
+        with TemporaryDirectory() as directory:
+            without_content = without_purpose.execute(
+                "without-purpose",
+                output_dir=directory,
+            ).read_text(encoding="utf-8")
+            with_content = with_purpose.execute(
+                "with-purpose",
+                output_dir=directory,
+            ).read_text(encoding="utf-8")
+
+        self.assertNotIn("purpose:", without_content)
+        self.assertIn(
+            '  purpose: "Group health governance policies."\n',
+            with_content,
+        )
+
+    def test_pack_purpose_validation(self) -> None:
+        with self.assertRaises(TypeError):
+            PolicyPackDesigner(
+                "eu-ai-act",
+                "EU AI Act",
+                "1.0.0",
+                purpose=123,  # type: ignore[arg-type]
+            )
+        with self.assertRaises(ValueError):
+            PolicyPackDesigner(
+                "eu-ai-act",
+                "EU AI Act",
+                "1.0.0",
+                purpose=" ",
+            )
 
     def test_pack_rejects_duplicate_policy_ids(self) -> None:
         policy = self._policy("data-governance")

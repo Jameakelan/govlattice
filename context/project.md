@@ -34,9 +34,9 @@ The package root exposes three version constants:
 ```python
 import govlattice
 
-govlattice.__version__              # "0.5.0"
-govlattice.__schema_version__       # "1.4.0"
-govlattice.__pack_schema_version__  # "1.0.0"
+govlattice.__version__              # "0.7.0"
+govlattice.__schema_version__       # "1.6.0"
+govlattice.__pack_schema_version__  # "1.2.0"
 ```
 
 Their responsibilities are:
@@ -55,6 +55,7 @@ The package root exports:
 
 ```python
 from govlattice import (
+    ComparisonOperator,
     PolicyDesigner,
     PolicyPackDesigner,
     PolicyReference,
@@ -127,6 +128,7 @@ from govlattice import PolicyDesigner, PolicyReference, SeverityLevel
 policy = (
     PolicyDesigner(
         policy_name="A10-health-policy",
+        purpose="Ensure health datasets meet quality requirements.",
         enabled=True,
         severity=SeverityLevel.HIGH,
         tags=("health", "integration-test"),
@@ -153,6 +155,16 @@ policy = (
             .require_missing_rate("hba1c", maximum=0.05)
             .require_range("hba1c", minimum=4.0, maximum=14.0)
             .require_metric("recall", 0.8)
+            .require_metric(
+                "false_positive_rate",
+                0.1,
+                operator=ComparisonOperator.LTE,
+            )
+            .require_column_value(
+                "age",
+                18,
+                operator=ComparisonOperator.GTE,
+            )
             .require_metrics(
                 ("precision", "f1_score"),
                 (0.75, 0.8),
@@ -182,6 +194,7 @@ The current constructor is:
 PolicyDesigner(
     policy_name,
     *,
+    purpose=None,
     enabled=True,
     severity=SeverityLevel.MEDIUM,
     tags=(),
@@ -196,6 +209,8 @@ PolicyDesigner(
 ### Standard fields
 
 - `policy_name`: The policy name and identity.
+- `purpose`: An optional explanation of what the policy is intended to
+  achieve.
 - `enabled`: Whether the policy is active as metadata; must be a `bool`.
 - `severity`: The policy's impact level.
 - `tags`: Labels used for discovery and grouping.
@@ -246,9 +261,12 @@ Arbitrary Python objects, `NaN`, and infinity are rejected.
 The following metadata keys are reserved:
 
 ```text
-name, enabled, severity, tags, lifecycle_stages, references,
+name, purpose, enabled, severity, tags, lifecycle_stages, references,
 created_at, updated_at, states, schema_version
 ```
+
+When provided, `purpose` must be a non-empty string. Surrounding whitespace is
+removed. When omitted or set to `None`, it is not written to the YAML output.
 
 ### Timestamp behavior
 
@@ -328,7 +346,53 @@ This represents a column or set of columns that must be unique.
 ```
 
 The metric name is a domain-defined string, such as `recall`, `precision`, or
-`f1_score`. The minimum score must be between `0` and `1`.
+`f1_score`. The comparison value must be between `0` and `1`. The default
+operator is `ComparisonOperator.GTE`, so the example means `recall >= 0.8`.
+
+An explicit operator can be used for metrics where lower values are better:
+
+```python
+from govlattice import ComparisonOperator
+
+.require_metric(
+    "false_positive_rate",
+    0.1,
+    operator=ComparisonOperator.LTE,
+)
+```
+
+For backward compatibility, the previous `minimum` keyword remains accepted:
+
+```python
+.require_metric("recall", minimum=0.8)
+```
+
+Do not pass both `value` and `minimum`.
+
+### Column value comparison
+
+```python
+.require_column_value(
+    "age",
+    18,
+    operator=ComparisonOperator.GTE,
+)
+```
+
+This requirement compares a numeric column value against one numeric
+threshold. It is available at both state and segment level.
+
+Supported comparison operators are:
+
+```python
+ComparisonOperator.LT   # <
+ComparisonOperator.LTE  # <=
+ComparisonOperator.GT   # >
+ComparisonOperator.GTE  # >=
+```
+
+Callers must pass a `ComparisonOperator`; raw strings such as `">="` are
+rejected.
 
 ### Multiple model metrics
 
@@ -346,6 +410,10 @@ Rules:
 - Both collections must have the same length.
 - Metric names must be unique within one requirement.
 - Every minimum score must be between `0` and `1`.
+
+`require_metrics()` retains its existing mapping form and does not currently
+accept per-metric operators. Use multiple `require_metric()` calls when
+different operators are needed.
 
 The correct API names are `require_metric` and `require_metrics`. There are no
 `metrice` or `metrices` aliases.
@@ -391,9 +459,10 @@ without placing all cross-node logic in builders.
 Example output:
 
 ```yaml
-schema_version: "1.4.0"
+schema_version: "1.6.0"
 policy:
   name: "A10-health-policy"
+  purpose: "Ensure health datasets meet quality requirements."
   enabled: true
   severity: "high"
   tags:
@@ -421,7 +490,12 @@ policy:
           requirements:
             - type: "require_metric"
               metric: "recall"
-              minimum: 0.8
+              operator: ">="
+              value: 0.8
+            - type: "require_column_value"
+              column: "age"
+              operator: ">="
+              value: 18
             - type: "require_metrics"
               metrics:
                 precision: 0.75
@@ -435,7 +509,7 @@ schemas/govlattice-policy.schema.json
 ```
 
 It uses JSON Schema Draft 2020-12. The current policy schema version is
-`1.4.0`.
+`1.6.0`.
 
 ## 10. Export Behavior
 
@@ -482,6 +556,7 @@ from govlattice import (
 data_policy = (
     PolicyDesigner(
         "data-governance",
+        purpose="Ensure training data meets governance requirements.",
         severity=SeverityLevel.HIGH,
         lifecycle_stages=("development", "validation"),
     )
@@ -495,6 +570,7 @@ pack = (
         pack_id="eu-ai-act",
         name="EU AI Act",
         version="1.0.0",
+        purpose="Group policies supporting EU AI Act compliance.",
         enabled=True,
         jurisdiction=("EU",),
         tags=("ai-governance", "regulatory"),
@@ -517,6 +593,7 @@ PolicyPackDesigner(
     name,
     version,
     *,
+    purpose=None,
     enabled=True,
     jurisdiction=(),
     tags=(),
@@ -536,9 +613,13 @@ Pack metadata supports the same value types as policy metadata. These keys are
 reserved:
 
 ```text
-id, name, version, enabled, jurisdiction, tags, policies,
+id, name, version, purpose, enabled, jurisdiction, tags, policies,
 pack_schema_version
 ```
+
+Pack `purpose` follows the same rules as policy `purpose`: it is optional,
+trimmed, must not be empty when supplied, and is omitted from the manifest when
+its value is `None`. `purpose` is also a reserved pack metadata key.
 
 ### Pack verifiers
 
@@ -563,11 +644,12 @@ policies/
 Example manifest:
 
 ```yaml
-pack_schema_version: "1.0.0"
+pack_schema_version: "1.2.0"
 policy_pack:
   id: "eu-ai-act"
   name: "EU AI Act"
   version: "1.0.0"
+  purpose: "Group policies supporting EU AI Act compliance."
   enabled: true
   jurisdiction:
     - "EU"
@@ -578,7 +660,7 @@ policy_pack:
       file: "policies/data-governance.yml"
       enabled: true
       severity: "high"
-      schema_version: "1.4.0"
+      schema_version: "1.6.0"
 ```
 
 The pack schema is:
@@ -608,6 +690,7 @@ Directory responsibilities:
 ```text
 govlattice/
 ├── __init__.py          Public exports and version constants
+├── comparison.py        ComparisonOperator enum
 ├── severity.py          SeverityLevel enum
 ├── designer/            Top-level policy and pack APIs
 ├── builder/             Fluent builders and YAML serializers
@@ -748,6 +831,7 @@ available:
 - `depends_on` relationships between policies.
 - Lifecycle enforcement.
 - Severity-dependent execution behavior.
+- Per-metric operators in `require_metrics()`.
 - Pack dependency resolution or a policy reuse registry.
 - A command-line interface.
 - Published-package build configuration.

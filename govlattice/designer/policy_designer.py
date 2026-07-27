@@ -20,6 +20,7 @@ class PolicyDesigner(Designer):
         self,
         policy_name: str,
         *,
+        purpose: Optional[str] = None,
         enabled: bool = True,
         severity: SeverityLevel = SeverityLevel.MEDIUM,
         tags: Sequence[str] = (),
@@ -32,6 +33,7 @@ class PolicyDesigner(Designer):
         super().__init__(policy_name)
         self._policy = PolicyNode(
             name=self.policy_name,
+            purpose=purpose,
             enabled=enabled,
             severity=severity,
             tags=tags,
@@ -59,6 +61,10 @@ class PolicyDesigner(Designer):
     @property
     def enabled(self) -> bool:
         return self._policy.enabled
+
+    @property
+    def purpose(self) -> Optional[str]:
+        return self._policy.purpose
 
     @property
     def severity(self) -> SeverityLevel:

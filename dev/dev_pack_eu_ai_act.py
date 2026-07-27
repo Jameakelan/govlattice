@@ -22,6 +22,10 @@ def define_eu_ai_act_pack() -> PolicyPackDesigner:
     data_governance = (
         PolicyDesigner(
             "data-governance",
+            purpose=(
+                "Ensure training data meets governance and quality "
+                "requirements."
+            ),
             severity=SeverityLevel.HIGH,
             tags=("eu-ai-act", "data-quality"),
             lifecycle_stages=("development", "validation"),
@@ -36,6 +40,10 @@ def define_eu_ai_act_pack() -> PolicyPackDesigner:
     human_oversight = (
         PolicyDesigner(
             "human-oversight",
+            purpose=(
+                "Ensure AI systems provide accountable human "
+                "oversight."
+            ),
             severity=SeverityLevel.CRITICAL,
             tags=("eu-ai-act", "governance"),
             lifecycle_stages=("deployment", "operation"),
@@ -56,6 +64,10 @@ def define_eu_ai_act_pack() -> PolicyPackDesigner:
             pack_id="eu-ai-act",
             name="EU AI Act",
             version="1.0.0",
+            purpose=(
+                "Group governance policies supporting EU AI Act "
+                "compliance."
+            ),
             jurisdiction=("EU",),
             tags=("ai-governance", "regulatory"),
             framework="Regulation (EU) 2024/1689",

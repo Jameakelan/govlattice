@@ -30,6 +30,13 @@ class YamlBuilder:
             "policy:",
             f"  name: {self._scalar(self._policy.name)}",
         ]
+        if self._policy.purpose is not None:
+            self._append_named_value(
+                lines,
+                "purpose",
+                self._policy.purpose,
+                indent=2,
+            )
         self._append_named_value(
             lines,
             "enabled",
