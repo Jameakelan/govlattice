@@ -1187,6 +1187,11 @@ Current examples:
   complete evaluation results.
 - `dev/dev_pandas_adapter.py`: Policy verification against a Pandas
   DataFrame.
+- `samples/iris/create_policies.py`: Deterministically generates the Iris
+  dataset-quality and model-quality policies inside `samples/iris/`.
+- `samples/iris/run_policy_engine.py`: Enforces the dataset policy, trains a
+  scikit-learn classifier, calculates real metrics, and enforces the model
+  policy.
 
 The existing filename `dev_policy_desinger.py` contains the spelling
 `desinger`; this section intentionally reflects the current repository name.
@@ -1202,6 +1207,12 @@ Optional Pandas dependencies:
 
 ```text
 pandas>=2.0,<4
+```
+
+The Iris sample installs the Pandas dependency set plus:
+
+```text
+scikit-learn>=1.4,<2
 ```
 
 ## 17. Testing Expectations

@@ -62,6 +62,25 @@ python -m dev.dev_pandas_adapter
 Run commands from the repository root so Python can resolve the local
 `govlattice` package.
 
+## Samples
+
+Generate the Iris dataset-quality and model-quality policies directly in the
+sample directory:
+
+```bash
+.venv/bin/python samples/iris/create_policies.py
+```
+
+See [`samples/iris/README.md`](samples/iris/README.md) for the policy intent
+and generated file names.
+
+Run the complete scikit-learn example:
+
+```bash
+.venv/bin/python -m pip install -r requirements-iris.txt
+.venv/bin/python samples/iris/run_policy_engine.py
+```
+
 ## Quick Start
 
 ```python

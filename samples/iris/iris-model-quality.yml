@@ -1,0 +1,33 @@
+schema_version: "1.6.0"
+policy:
+  name: "iris-model-quality"
+  purpose: "Define minimum classification quality for an Iris model."
+  enabled: true
+  severity: "high"
+  tags:
+    - "iris"
+    - "model"
+    - "classification"
+  lifecycle_stages:
+    - "model-validation"
+  references: []
+  owner: "model-quality-team"
+  states:
+    "model_evaluation":
+      requirements:
+        - type: "require_metric"
+          metric: "accuracy"
+          operator: ">="
+          value: 0.9
+        - type: "require_metric"
+          metric: "macro_precision"
+          operator: ">="
+          value: 0.85
+        - type: "require_metric"
+          metric: "macro_recall"
+          operator: ">="
+          value: 0.85
+        - type: "require_metric"
+          metric: "macro_f1"
+          operator: ">="
+          value: 0.85
