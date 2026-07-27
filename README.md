@@ -22,6 +22,7 @@ across teams.
 - Optional purpose, severity, tags, lifecycle stages, timestamps, and links
 - Custom YAML-compatible metadata
 - Versioned policy packs
+- Safe, schema-validated policy reading
 - Deterministic YAML with atomic file writes
 - JSON Schemas for policy and pack output
 
@@ -30,7 +31,7 @@ across teams.
 ```python
 import govlattice
 
-print(govlattice.__version__)              # 0.7.0
+print(govlattice.__version__)              # 0.8.0
 print(govlattice.__schema_version__)       # 1.6.0
 print(govlattice.__pack_schema_version__)  # 1.2.0
 ```
@@ -43,6 +44,7 @@ repository's virtual environment for local development:
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
+python -m pip install -r requirements.txt
 python -m unittest discover -s tests -v
 ```
 
@@ -329,6 +331,62 @@ policies/
 Pack verification runs automatically during `execute()`. Explicit verifier
 calls are useful when validation should fail before export starts.
 
+## Reading a Policy
+
+Use `PolicyReader` to safely load and validate a generated policy:
+
+```python
+from govlattice import PolicyReader
+
+policy = PolicyReader.read("policies/health_data_quality.yml")
+
+print(policy.name)
+print(policy.purpose)
+print(policy.schema_version)
+
+for state_id, state in policy.states.items():
+    print(state_id, state.requirements)
+```
+
+The reader:
+
+- Accepts `.yml` and `.yaml` files.
+- Uses the PyYAML safe loader.
+- Rejects duplicate YAML keys and unsafe Python YAML tags.
+- Rejects files larger than 1 MiB.
+- Validates the document against the policy JSON Schema.
+- Supports only the current policy schema version.
+- Converts severity and comparison operators back to enums.
+- Returns frozen, slotted dataclass definitions and recursively read-only
+  metadata.
+
+Internally, reading follows four reusable responsibilities:
+
+```text
+PolicyYamlLoader
+    → PolicyValidator
+        → JsonSchemaValidator
+    → PolicyDefinitionFactory
+```
+
+`JsonSchemaValidator` is reusable for future document types such as
+policy-pack manifests and caches compiled validators by schema path.
+
+Reader errors share one base class:
+
+```python
+from govlattice import (
+    PolicyFileError,
+    PolicyReadError,
+    PolicySyntaxError,
+    PolicyValidationError,
+    UnsupportedPolicySchemaError,
+)
+```
+
+`PolicyReader` reads individual policy files only. Policy-pack reading and
+schema migration are not implemented yet.
+
 ## YAML Output
 
 Example policy output:
@@ -389,10 +447,10 @@ Run the examples:
 ```bash
 .venv/bin/python dev/dev_policy_desinger.py
 .venv/bin/python dev/dev_pack_eu_ai_act.py
+.venv/bin/python dev/dev_policy_reader.py
 ```
 
 Generated files are written under `policies/`, which is ignored by Git.
 
 For architectural details, validation rules, design decisions, and current
 limitations, see [context/project.md](context/project.md).
-

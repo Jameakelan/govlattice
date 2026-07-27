@@ -22,6 +22,7 @@ The current system can:
 - Detect overlapping segment ranges within a state.
 - Group multiple policies into a versioned policy pack.
 - Export policies and packs as deterministic YAML.
+- Safely read and validate exported policy YAML.
 - Validate inputs before writing files.
 
 GovLattice currently **defines and exports policies**. It does not yet include
@@ -34,7 +35,7 @@ The package root exposes three version constants:
 ```python
 import govlattice
 
-govlattice.__version__              # "0.7.0"
+govlattice.__version__              # "0.8.0"
 govlattice.__schema_version__       # "1.6.0"
 govlattice.__pack_schema_version__  # "1.2.0"
 ```
@@ -59,12 +60,31 @@ from govlattice import (
     PolicyDesigner,
     PolicyPackDesigner,
     PolicyReference,
+    PolicyReader,
     SeverityLevel,
 )
 ```
 
 Applications should use these public APIs. Internal node classes are
 implementation details and should not be constructed directly.
+
+Reader definitions and errors are also exported from the package root:
+
+```python
+from govlattice import (
+    ConditionDefinition,
+    PolicyDefinition,
+    PolicyFileError,
+    PolicyReadError,
+    PolicySyntaxError,
+    PolicyValidationError,
+    ReferenceDefinition,
+    RequirementDefinition,
+    SegmentDefinition,
+    StateDefinition,
+    UnsupportedPolicySchemaError,
+)
+```
 
 ## 4. Core Domain Model
 
@@ -669,7 +689,88 @@ The pack schema is:
 schemas/govlattice-policy-pack.schema.json
 ```
 
-## 12. Architecture and Responsibilities
+## 12. Reading Policies
+
+`PolicyReader` safely loads one policy YAML file and returns an immutable,
+typed `PolicyDefinition`:
+
+```python
+from govlattice import PolicyReader
+
+policy = PolicyReader.read("policies/health_policy.yml")
+
+print(policy.name)
+print(policy.purpose)
+print(policy.severity)
+
+for state_id, state in policy.states.items():
+    print(state_id, state.requirements)
+```
+
+The read pipeline is:
+
+```text
+YAML file
+    ↓
+PolicyYamlLoader
+    └── PyYAML safe loader with duplicate-key rejection
+    ↓
+PolicyValidator
+    ├── Schema-version check
+    └── JsonSchemaValidator
+            └── JSON Schema Draft 2020-12 validation
+    ↓
+PolicyDefinitionFactory
+    └── Immutable PolicyDefinition
+```
+
+Reader behavior:
+
+- Accepts string and `Path` inputs ending in `.yml` or `.yaml`.
+- Rejects missing paths, directories, invalid extensions, and files larger
+  than 1 MiB.
+- Reads UTF-8 only.
+- Uses a customized PyYAML `SafeLoader`.
+- Rejects duplicate keys and unsafe YAML object tags.
+- Validates date-time formats and all other policy schema rules using
+  `jsonschema`.
+- Supports only `govlattice.__schema_version__`, currently `1.6.0`.
+- Converts severity strings into `SeverityLevel`.
+- Converts requirement operators into `ComparisonOperator`.
+- Separates custom metadata from standard policy fields.
+- Recursively freezes mappings as read-only mapping proxies and lists as
+  tuples.
+
+Returned read models are frozen, slotted dataclasses:
+
+```text
+PolicyDefinition
+├── ReferenceDefinition
+└── StateDefinition
+    ├── RequirementDefinition
+    └── SegmentDefinition
+        ├── ConditionDefinition
+        └── RequirementDefinition
+```
+
+Reader error hierarchy:
+
+```text
+PolicyReadError
+├── PolicyFileError
+├── PolicySyntaxError
+├── PolicyValidationError
+└── UnsupportedPolicySchemaError
+```
+
+`PolicyReader` does not return `PolicyDesigner`. The designer is a mutable
+construction API, while reader definitions represent validated, read-only
+policy data for inspection and future execution.
+
+Policy-pack reading, schema migrations, remote URL loading, and policy editing
+are outside the v1 reader scope.
+
+## 13. Architecture and Responsibilities
 
 The main data flow is:
 
@@ -683,6 +784,12 @@ Internal node tree
     └── YAML Builder
             ↓
       Atomic file helper
+
+Policy YAML
+    ↓
+PolicyReader
+    ↓
+Immutable definitions
 ```
 
 Directory responsibilities:
@@ -690,8 +797,21 @@ Directory responsibilities:
 ```text
 govlattice/
 ├── __init__.py          Public exports and version constants
-├── comparison.py        ComparisonOperator enum
-├── severity.py          SeverityLevel enum
+├── enum/
+│   ├── comparison.py    ComparisonOperator enum
+│   └── severity.py      SeverityLevel enum
+├── error/
+│   ├── policy_read_error.py    PolicyReader exception hierarchy
+│   └── schema_validation_error.py  Reusable schema-validation error
+├── model/
+│   └── policy_definition.py  Frozen, slotted read-model dataclasses
+├── reader/
+│   ├── policy_reader.py            Reader workflow orchestration
+│   ├── policy_yaml_loader.py       Safe file and YAML loading
+│   └── policy_definition_factory.py  Read-model construction
+├── validator/
+│   ├── json_schema_validator.py    Reusable JSON Schema validation
+│   └── policy_validator.py         Policy schema-version and contract checks
 ├── designer/            Top-level policy and pack APIs
 ├── builder/             Fluent builders and YAML serializers
 ├── nodes/               Internal domain representation
@@ -713,8 +833,21 @@ Responsibility boundaries:
 - A Verifier validates relationships across multiple nodes.
 - A YAML Builder serializes the node tree deterministically.
 - File helpers validate paths, create directories, and perform atomic writes.
+- A Validator checks serialized contracts independently of reading or
+  designing policies.
 
-## 13. Design Decisions
+`JsonSchemaValidator` is reusable infrastructure. It accepts a schema path,
+validates arbitrary mapping documents, formats field-level errors, and caches
+the compiled validator by resolved schema path. `PolicyValidator` adds
+policy-specific schema-version handling and converts generic schema failures
+into `PolicyValidationError`.
+
+The existing `verifier/` package remains separate:
+
+- `validator/` checks serialized document contracts.
+- `verifier/` checks semantic relationships between domain nodes.
+
+## 14. Design Decisions
 
 ### Policy names are not duplicated as `self.policy_id`
 
@@ -758,16 +891,30 @@ of syntax that requires Python 3.10 or newer, such as `A | B`. It also avoids
 depending on `typing.Self`, preventing Pylance issues when a project targets an
 older Python version.
 
-## 14. Local Development
+### Policy reading is separate from policy design
+
+`PolicyDesigner` builds mutable policy trees. `PolicyReader` returns immutable
+definitions after schema validation. This boundary prevents accidental edits
+and prepares the project for a future execution layer.
+
+### YAML reading uses established safe parsers
+
+The writer remains dependency-free, but the reader uses PyYAML rather than a
+custom YAML parser. JSON Schema validation uses `jsonschema` so the serialized
+schema remains the validation source of truth.
+
+## 15. Local Development
 
 The repository contains a `.venv` at its root. Run commands from the project
 root:
 
 ```bash
 source .venv/bin/activate
+python -m pip install -r requirements.txt
 python -m unittest discover -s tests -v
 python dev/dev_policy_desinger.py
 python dev/dev_pack_eu_ai_act.py
+python dev/dev_policy_reader.py
 ```
 
 Without activating the environment:
@@ -789,11 +936,20 @@ Current examples:
   custom metadata, and metric requirements.
 - `dev/dev_pack_eu_ai_act.py`: Policy packs, severity, lifecycle stages,
   references, and pack verification.
+- `dev/dev_policy_reader.py`: Safe loading and inspection of a generated
+  policy.
 
 The existing filename `dev_policy_desinger.py` contains the spelling
 `desinger`; this section intentionally reflects the current repository name.
 
-## 15. Testing Expectations
+Runtime dependencies:
+
+```text
+PyYAML>=6.0,<7
+jsonschema>=4.0,<5
+```
+
+## 16. Testing Expectations
 
 The project uses the standard-library `unittest` framework.
 
@@ -808,17 +964,20 @@ Changes to behavior should test at least:
 - Atomic output behavior.
 - Version agreement among constants, YAML builders, and JSON Schemas.
 - Single-policy and policy-pack export.
+- Safe policy reading, duplicate-key rejection, schema validation, immutable
+  definitions, and unsupported schema versions.
 
 The generated `policies/` directory is ignored by Git because it is user
 output, not source code.
 
-## 16. Current Limitations and Deferred Ideas
+## 17. Current Limitations and Deferred Ideas
 
 The following features are not implemented and must not be presented as
 available:
 
 - A runtime engine that evaluates data or models from YAML.
-- Loading policy YAML back into Python objects.
+- Loading policy-pack manifests.
+- Reading older policy schemas through migrations.
 - Nested segments.
 - Conditions other than `between`.
 - Multiple Boolean conditions in one segment.
@@ -839,7 +998,7 @@ available:
 These are extension candidates only. Discuss their public APIs and serialized
 contracts before changing the project structure or schemas.
 
-## 17. Change Guidelines
+## 18. Change Guidelines
 
 When implementing a new feature:
 
@@ -855,7 +1014,7 @@ When implementing a new feature:
    builders, examples, and tests together.
 8. Update this document to describe only behavior that has been implemented.
 
-## 18. Source-of-Truth Priority
+## 19. Source-of-Truth Priority
 
 If project information conflicts, use this order:
 

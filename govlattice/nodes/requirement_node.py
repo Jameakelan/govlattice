@@ -4,7 +4,7 @@ from typing import Optional
 from typing import Sequence
 from typing import Union
 
-from govlattice.comparison import ComparisonOperator
+from govlattice.enum import ComparisonOperator
 
 
 Number = Union[int, float]

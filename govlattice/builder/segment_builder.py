@@ -3,7 +3,7 @@ from typing import Optional
 from typing import Sequence
 
 from govlattice.builder import Builder
-from govlattice.comparison import ComparisonOperator
+from govlattice.enum import ComparisonOperator
 from govlattice.nodes.condition_node import ConditionNode
 from govlattice.nodes.requirement_node import Number
 from govlattice.nodes.requirement_node import RequirementNode

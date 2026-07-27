@@ -1,10 +1,22 @@
-__version__ = "0.7.0"
+__version__ = "0.8.0"
 __schema_version__ = "1.6.0"
 __pack_schema_version__ = "1.2.0"
 
-from govlattice.comparison import ComparisonOperator
+from govlattice.enum import ComparisonOperator
+from govlattice.enum import SeverityLevel
+from govlattice.error import PolicyFileError
+from govlattice.error import PolicyReadError
+from govlattice.error import PolicySyntaxError
+from govlattice.error import PolicyValidationError
+from govlattice.error import UnsupportedPolicySchemaError
+from govlattice.model import ConditionDefinition
+from govlattice.model import PolicyDefinition
+from govlattice.model import ReferenceDefinition
+from govlattice.model import RequirementDefinition
+from govlattice.model import SegmentDefinition
+from govlattice.model import StateDefinition
 from govlattice.nodes.policy_reference_node import PolicyReference
-from govlattice.severity import SeverityLevel
+from govlattice.reader import PolicyReader
 from govlattice.designer.policy_designer import PolicyDesigner
 from govlattice.designer.policy_pack_designer import PolicyPackDesigner
 
@@ -13,8 +25,20 @@ __all__ = [
     "__schema_version__",
     "__pack_schema_version__",
     "ComparisonOperator",
+    "ConditionDefinition",
     "PolicyReference",
+    "PolicyDefinition",
     "PolicyDesigner",
+    "PolicyFileError",
     "PolicyPackDesigner",
+    "PolicyReadError",
+    "PolicyReader",
+    "PolicySyntaxError",
+    "PolicyValidationError",
+    "ReferenceDefinition",
+    "RequirementDefinition",
+    "SegmentDefinition",
     "SeverityLevel",
+    "StateDefinition",
+    "UnsupportedPolicySchemaError",
 ]

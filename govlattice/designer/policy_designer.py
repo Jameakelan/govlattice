@@ -10,7 +10,7 @@ from govlattice.designer import Designer
 from govlattice.nodes.policy_node import PolicyNode
 from govlattice.nodes.policy_reference_node import PolicyReference
 from govlattice.nodes.state_node import StateNode
-from govlattice.severity import SeverityLevel
+from govlattice.enum import SeverityLevel
 
 
 class PolicyDesigner(Designer):

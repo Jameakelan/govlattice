@@ -4,7 +4,7 @@ from typing import Sequence
 
 from govlattice.builder import Builder
 from govlattice.builder.segment_builder import SegmentBuilder
-from govlattice.comparison import ComparisonOperator
+from govlattice.enum import ComparisonOperator
 from govlattice.nodes.requirement_node import Number
 from govlattice.nodes.requirement_node import RequirementNode
 from govlattice.nodes.segment_node import SegmentNode

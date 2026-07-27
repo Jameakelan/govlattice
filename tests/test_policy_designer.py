@@ -14,7 +14,7 @@ from govlattice.verifier.range_overlap_verifier import OverlapRangeError
 
 class PolicyDesignerTests(unittest.TestCase):
     def test_public_versions(self) -> None:
-        self.assertEqual(govlattice.__version__, "0.7.0")
+        self.assertEqual(govlattice.__version__, "0.8.0")
         self.assertEqual(govlattice.__schema_version__, "1.6.0")
         self.assertEqual(govlattice.__pack_schema_version__, "1.2.0")
 

@@ -7,7 +7,7 @@ from typing import Sequence
 
 from govlattice.nodes.state_node import StateNode
 from govlattice.nodes.policy_reference_node import PolicyReference
-from govlattice.severity import SeverityLevel
+from govlattice.enum import SeverityLevel
 
 
 class PolicyNode:
