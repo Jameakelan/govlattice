@@ -31,7 +31,7 @@ across teams.
 ```python
 import govlattice
 
-print(govlattice.__version__)              # 0.8.0
+print(govlattice.__version__)              # 0.9.0
 print(govlattice.__schema_version__)       # 1.6.0
 print(govlattice.__pack_schema_version__)  # 1.2.0
 ```
@@ -384,8 +384,39 @@ from govlattice import (
 )
 ```
 
-`PolicyReader` reads individual policy files only. Policy-pack reading and
-schema migration are not implemented yet.
+### Reading a policy pack
+
+`PolicyPackReader` validates a manifest and eagerly loads every referenced
+policy through `PolicyReader`:
+
+```python
+from govlattice import PolicyPackReader
+
+pack = PolicyPackReader.read(
+    "policies/eu-ai-act/manifest.yml"
+)
+
+print(pack.name, pack.version)
+
+for policy_id, entry in pack.policies.items():
+    print(policy_id, entry.severity)
+    print(entry.policy.states)
+```
+
+The pack reader:
+
+- Validates pack schema version `1.2.0`.
+- Validates the manifest with the reusable `JsonSchemaValidator`.
+- Rejects missing policy files, duplicate IDs, and duplicate file references.
+- Prevents absolute paths, traversal, and symlink escapes.
+- Requires referenced files to remain under the pack's `policies/` directory.
+- Ensures manifest ID, enabled state, severity, and schema version match each
+  loaded policy.
+- Returns frozen, slotted `PolicyPackDefinition` and
+  `PolicyPackEntryDefinition` objects.
+
+Both readers currently support only their current schema versions. Schema
+migration is not implemented yet.
 
 ## YAML Output
 
@@ -448,6 +479,7 @@ Run the examples:
 .venv/bin/python dev/dev_policy_desinger.py
 .venv/bin/python dev/dev_pack_eu_ai_act.py
 .venv/bin/python dev/dev_policy_reader.py
+.venv/bin/python dev/dev_policy_pack_reader.py
 ```
 
 Generated files are written under `policies/`, which is ignored by Git.

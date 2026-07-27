@@ -10,6 +10,7 @@ from govlattice.model import ReferenceDefinition
 from govlattice.model import RequirementDefinition
 from govlattice.model import SegmentDefinition
 from govlattice.model import StateDefinition
+from govlattice.model.immutable import freeze_value
 
 
 STANDARD_POLICY_KEYS = frozenset(
@@ -36,7 +37,7 @@ class PolicyDefinitionFactory:
     ) -> PolicyDefinition:
         policy = document["policy"]
         metadata = {
-            key: cls._freeze(value)
+            key: freeze_value(value)
             for key, value in policy.items()
             if key not in STANDARD_POLICY_KEYS
         }
@@ -116,7 +117,7 @@ class PolicyDefinitionFactory:
                 key: (
                     ComparisonOperator(value)
                     if key == "operator"
-                    else cls._freeze(value)
+                    else freeze_value(value)
                 )
                 for key, value in requirement.items()
                 if key != "type"
@@ -128,16 +129,3 @@ class PolicyDefinitionFactory:
                 )
             )
         return tuple(definitions)
-
-    @classmethod
-    def _freeze(cls, value: Any) -> Any:
-        if isinstance(value, dict):
-            return MappingProxyType(
-                {
-                    key: cls._freeze(item)
-                    for key, item in value.items()
-                }
-            )
-        if isinstance(value, list):
-            return tuple(cls._freeze(item) for item in value)
-        return value

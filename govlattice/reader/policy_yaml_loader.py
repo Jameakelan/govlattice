@@ -16,12 +16,12 @@ YAML_SUFFIXES = frozenset({".yaml", ".yml"})
 MAX_POLICY_FILE_BYTES = 1024 * 1024
 
 
-class _UniqueKeySafeLoader(yaml.SafeLoader):
+class UniqueKeySafeLoader(yaml.SafeLoader):
     pass
 
 
 def _construct_unique_mapping(
-    loader: _UniqueKeySafeLoader,
+    loader: UniqueKeySafeLoader,
     node: MappingNode,
     deep: bool = False,
 ) -> dict[Any, Any]:
@@ -48,7 +48,7 @@ def _construct_unique_mapping(
     return mapping
 
 
-_UniqueKeySafeLoader.add_constructor(
+UniqueKeySafeLoader.add_constructor(
     yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG,
     _construct_unique_mapping,
 )
@@ -98,7 +98,7 @@ class PolicyYamlLoader:
             ) from error
 
         try:
-            document = yaml.load(content, Loader=_UniqueKeySafeLoader)
+            document = yaml.load(content, Loader=UniqueKeySafeLoader)
         except yaml.YAMLError as error:
             raise PolicySyntaxError(
                 f'invalid policy YAML in "{path}": {error}'

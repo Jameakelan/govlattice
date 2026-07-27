@@ -35,7 +35,7 @@ The package root exposes three version constants:
 ```python
 import govlattice
 
-govlattice.__version__              # "0.8.0"
+govlattice.__version__              # "0.9.0"
 govlattice.__schema_version__       # "1.6.0"
 govlattice.__pack_schema_version__  # "1.2.0"
 ```
@@ -60,6 +60,7 @@ from govlattice import (
     PolicyDesigner,
     PolicyPackDesigner,
     PolicyReference,
+    PolicyPackReader,
     PolicyReader,
     SeverityLevel,
 )
@@ -75,6 +76,12 @@ from govlattice import (
     ConditionDefinition,
     PolicyDefinition,
     PolicyFileError,
+    PolicyPackConsistencyError,
+    PolicyPackDefinition,
+    PolicyPackEntryDefinition,
+    PolicyPackFileError,
+    PolicyPackReadError,
+    PolicyPackValidationError,
     PolicyReadError,
     PolicySyntaxError,
     PolicyValidationError,
@@ -83,6 +90,7 @@ from govlattice import (
     SegmentDefinition,
     StateDefinition,
     UnsupportedPolicySchemaError,
+    UnsupportedPolicyPackSchemaError,
 )
 ```
 
@@ -767,8 +775,64 @@ PolicyReadError
 construction API, while reader definitions represent validated, read-only
 policy data for inspection and future execution.
 
-Policy-pack reading, schema migrations, remote URL loading, and policy editing
-are outside the v1 reader scope.
+### Reading policy packs
+
+`PolicyPackReader` safely loads a pack manifest and every referenced policy:
+
+```python
+from govlattice import PolicyPackReader
+
+pack = PolicyPackReader.read(
+    "policies/eu-ai-act/manifest.yml"
+)
+
+for policy_id, entry in pack.policies.items():
+    print(policy_id, entry.policy.states)
+```
+
+The pack read pipeline is:
+
+```text
+manifest.yml
+    ↓
+PolicyPackYamlLoader
+    ↓
+PolicyPackValidator
+    └── JsonSchemaValidator
+    ↓
+Secure policy-path resolution
+    ↓
+PolicyReader for every entry
+    ↓
+Cross-file consistency validation
+    ↓
+PolicyPackDefinitionFactory
+    └── Immutable PolicyPackDefinition
+```
+
+Pack reader behavior:
+
+- Eagerly loads all policies before returning.
+- Requires policy paths under the pack's `policies/` directory.
+- Rejects absolute paths, `..`, paths outside the pack, and symlink escapes.
+- Rejects duplicate policy IDs and duplicate resolved file references.
+- Verifies that manifest ID, enabled, severity, and policy schema version
+  match the loaded policy.
+- Returns frozen, slotted `PolicyPackDefinition` and
+  `PolicyPackEntryDefinition` objects with recursively read-only metadata.
+
+Pack reader error hierarchy:
+
+```text
+PolicyPackReadError
+├── PolicyPackFileError
+├── PolicyPackValidationError
+├── PolicyPackConsistencyError
+└── UnsupportedPolicyPackSchemaError
+```
+
+Schema migrations, remote URL loading, lazy policy loading, and policy editing
+are outside the current reader scope.
 
 ## 13. Architecture and Responsibilities
 
@@ -790,6 +854,12 @@ Policy YAML
 PolicyReader
     ↓
 Immutable definitions
+
+Pack manifest
+    ↓
+PolicyPackReader
+    ↓
+Immutable pack and policy definitions
 ```
 
 Directory responsibilities:
@@ -802,16 +872,23 @@ govlattice/
 │   └── severity.py      SeverityLevel enum
 ├── error/
 │   ├── policy_read_error.py    PolicyReader exception hierarchy
+│   ├── policy_pack_read_error.py  PolicyPackReader exception hierarchy
 │   └── schema_validation_error.py  Reusable schema-validation error
 ├── model/
-│   └── policy_definition.py  Frozen, slotted read-model dataclasses
+│   ├── policy_definition.py       Frozen policy dataclasses
+│   ├── policy_pack_definition.py  Frozen pack dataclasses
+│   └── immutable.py               Recursive immutable-value helper
 ├── reader/
 │   ├── policy_reader.py            Reader workflow orchestration
+│   ├── policy_pack_reader.py       Pack reader orchestration and security
 │   ├── policy_yaml_loader.py       Safe file and YAML loading
-│   └── policy_definition_factory.py  Read-model construction
+│   ├── policy_pack_yaml_loader.py  Safe manifest loading
+│   ├── policy_definition_factory.py  Policy read-model construction
+│   └── policy_pack_definition_factory.py  Pack read-model construction
 ├── validator/
 │   ├── json_schema_validator.py    Reusable JSON Schema validation
-│   └── policy_validator.py         Policy schema-version and contract checks
+│   ├── policy_validator.py         Policy contract checks
+│   └── policy_pack_validator.py    Pack contract checks
 ├── designer/            Top-level policy and pack APIs
 ├── builder/             Fluent builders and YAML serializers
 ├── nodes/               Internal domain representation
@@ -938,6 +1015,8 @@ Current examples:
   references, and pack verification.
 - `dev/dev_policy_reader.py`: Safe loading and inspection of a generated
   policy.
+- `dev/dev_policy_pack_reader.py`: Secure loading and inspection of a
+  generated policy pack.
 
 The existing filename `dev_policy_desinger.py` contains the spelling
 `desinger`; this section intentionally reflects the current repository name.
@@ -966,6 +1045,8 @@ Changes to behavior should test at least:
 - Single-policy and policy-pack export.
 - Safe policy reading, duplicate-key rejection, schema validation, immutable
   definitions, and unsupported schema versions.
+- Safe policy-pack reading, path and symlink containment, cross-file
+  consistency, eager loading, and duplicate detection.
 
 The generated `policies/` directory is ignored by Git because it is user
 output, not source code.
@@ -976,7 +1057,6 @@ The following features are not implemented and must not be presented as
 available:
 
 - A runtime engine that evaluates data or models from YAML.
-- Loading policy-pack manifests.
 - Reading older policy schemas through migrations.
 - Nested segments.
 - Conditions other than `between`.
