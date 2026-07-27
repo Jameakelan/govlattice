@@ -16,7 +16,7 @@ def resolve_output_path(
 ) -> Path:
     """Validate an output file name and resolve its project directory."""
     file_path = _validate_file_name(file_name, allowed_suffixes)
-    output_directory = _resolve_output_directory(output_dir)
+    output_directory = resolve_output_directory(output_dir)
     return output_directory / file_path.name
 
 
@@ -68,7 +68,7 @@ def _validate_file_name(
     return file_path
 
 
-def _resolve_output_directory(output_dir: PathInput) -> Path:
+def resolve_output_directory(output_dir: PathInput) -> Path:
     if not isinstance(output_dir, (str, Path)):
         raise TypeError("output_dir must be a string or Path")
     if isinstance(output_dir, str) and not output_dir.strip():

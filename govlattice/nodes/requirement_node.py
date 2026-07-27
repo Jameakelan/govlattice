@@ -1,5 +1,6 @@
 from numbers import Real
 from typing import Any
+from typing import Sequence
 from typing import Union
 
 
@@ -74,6 +75,57 @@ class RequirementNode:
         )
 
     @classmethod
+    def metric(
+        cls,
+        metric: str,
+        minimum: Number,
+    ) -> "RequirementNode":
+        return cls(
+            "require_metric",
+            {
+                "metric": cls._validate_metric(metric),
+                "minimum": cls._validate_score(minimum),
+            },
+        )
+
+    @classmethod
+    def metrics(
+        cls,
+        metrics: Sequence[str],
+        minimums: Sequence[Number],
+    ) -> "RequirementNode":
+        if isinstance(metrics, (str, bytes)) or not isinstance(
+            metrics,
+            (list, tuple),
+        ):
+            raise TypeError("metrics must be a list or tuple of strings")
+        if isinstance(minimums, (str, bytes)) or not isinstance(
+            minimums,
+            (list, tuple),
+        ):
+            raise TypeError(
+                "minimums must be a list or tuple of numbers"
+            )
+        if not metrics:
+            raise ValueError("at least one metric is required")
+        if len(metrics) != len(minimums):
+            raise ValueError(
+                "metrics and minimums must have the same length"
+            )
+
+        thresholds: dict[str, Number] = {}
+        for metric, minimum in zip(metrics, minimums):
+            metric = cls._validate_metric(metric)
+            if metric in thresholds:
+                raise ValueError(f'duplicate metric "{metric}"')
+            thresholds[metric] = cls._validate_score(minimum)
+
+        return cls(
+            "require_metrics",
+            {"metrics": thresholds},
+        )
+
+    @classmethod
     def _validate_columns(
         cls,
         columns: tuple[str, ...],
@@ -90,6 +142,22 @@ class RequirementNode:
         if not column:
             raise ValueError("column names must not be empty")
         return column
+
+    @staticmethod
+    def _validate_metric(metric: str) -> str:
+        if not isinstance(metric, str):
+            raise TypeError("metric names must be strings")
+        metric = metric.strip()
+        if not metric:
+            raise ValueError("metric names must not be empty")
+        return metric
+
+    @classmethod
+    def _validate_score(cls, value: Number) -> Number:
+        value = cls._validate_number("minimum score", value)
+        if value < 0 or value > 1:
+            raise ValueError("minimum score must be between 0 and 1")
+        return value
 
     @staticmethod
     def _validate_number(name: str, value: Number) -> Number:

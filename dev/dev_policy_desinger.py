@@ -39,6 +39,11 @@ def define_multiple_states_in_policy() -> None:
                 .when_between("age", minimum=18, maximum=59)
                 .require_missing_rate("hba1c", maximum=0.05)
                 .require_range("hba1c", minimum=4.0, maximum=14.0)
+                .require_metric("recall", 0.8)
+                .require_metrics(
+                    ("precision", "f1_score"),
+                    (0.75, 0.8),
+                )
             .end()
             .segment("senior")
                 .when_between("age", minimum=60, maximum=100)

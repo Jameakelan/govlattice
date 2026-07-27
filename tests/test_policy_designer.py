@@ -5,14 +5,17 @@ from tempfile import TemporaryDirectory
 import unittest
 
 import govlattice
+from govlattice import PolicyReference
+from govlattice import SeverityLevel
 from govlattice.designer.policy_designer import PolicyDesigner
 from govlattice.verifier.range_overlap_verifier import OverlapRangeError
 
 
 class PolicyDesignerTests(unittest.TestCase):
     def test_public_versions(self) -> None:
-        self.assertEqual(govlattice.__version__, "0.3.0")
-        self.assertEqual(govlattice.__schema_version__, "1.2.0")
+        self.assertEqual(govlattice.__version__, "0.5.0")
+        self.assertEqual(govlattice.__schema_version__, "1.4.0")
+        self.assertEqual(govlattice.__pack_schema_version__, "1.0.0")
 
     def test_json_schema_uses_public_schema_version(self) -> None:
         schema_path = (
@@ -141,11 +144,14 @@ class PolicyDesignerTests(unittest.TestCase):
             self.assertEqual(
                 output.read_text(encoding="utf-8"),
                 (
-                    'schema_version: "1.2.0"\n'
+                    'schema_version: "1.4.0"\n'
                     "policy:\n"
                     '  name: "A10-health-policy"\n'
                     "  enabled: true\n"
+                    '  severity: "medium"\n'
                     "  tags: []\n"
+                    "  lifecycle_stages: []\n"
+                    "  references: []\n"
                     "  states:\n"
                     '    "dataset":\n'
                     "      requirements:\n"
@@ -169,11 +175,14 @@ class PolicyDesignerTests(unittest.TestCase):
             self.assertEqual(
                 output.read_text(encoding="utf-8"),
                 (
-                    'schema_version: "1.2.0"\n'
+                    'schema_version: "1.4.0"\n'
                     'policy:\n'
                     '  name: "health-policy"\n'
                     '  enabled: true\n'
+                    '  severity: "medium"\n'
                     '  tags: []\n'
+                    '  lifecycle_stages: []\n'
+                    '  references: []\n'
                     '  states: {}\n'
                 ),
             )
@@ -389,13 +398,16 @@ class PolicyDesignerTests(unittest.TestCase):
         self.assertEqual(
             content,
             (
-                'schema_version: "1.2.0"\n'
+                'schema_version: "1.4.0"\n'
                 "policy:\n"
                 '  name: "health-policy"\n'
                 "  enabled: false\n"
+                '  severity: "medium"\n'
                 "  tags:\n"
                 '    - "health"\n'
                 '    - "testing"\n'
+                "  lifecycle_stages: []\n"
+                "  references: []\n"
                 '  created_at: "2026-07-01T09:00:00+07:00"\n'
                 '  updated_at: "2026-07-27T17:30:00+07:00"\n'
                 "  agile:\n"
@@ -442,6 +454,96 @@ class PolicyDesignerTests(unittest.TestCase):
                 "health-policy",
                 custom=float("nan"),
             )
+
+    def test_severity_lifecycle_and_references(self) -> None:
+        reference = PolicyReference(
+            "Official regulation",
+            "https://example.com/regulation",
+        )
+        designer = PolicyDesigner(
+            "health-policy",
+            severity=SeverityLevel.HIGH,
+            lifecycle_stages=(
+                "validation",
+                "deployment",
+                "validation",
+            ),
+            references=(reference, reference),
+        )
+
+        self.assertEqual(designer.severity, SeverityLevel.HIGH)
+        self.assertEqual(designer.references, (reference,))
+
+        with TemporaryDirectory() as directory:
+            content = designer.execute(
+                "health_policy.yml",
+                output_dir=directory,
+            ).read_text(encoding="utf-8")
+
+        self.assertIn('severity: "high"', content)
+        self.assertIn('    - "validation"', content)
+        self.assertIn('    - "deployment"', content)
+        self.assertIn('      title: "Official regulation"', content)
+        self.assertIn(
+            '      url: "https://example.com/regulation"',
+            content,
+        )
+
+    def test_severity_lifecycle_and_reference_validation(self) -> None:
+        with self.assertRaises(TypeError):
+            PolicyDesigner("health-policy", severity="high")
+        with self.assertRaises(TypeError):
+            PolicyDesigner(
+                "health-policy",
+                lifecycle_stages="deployment",
+            )
+        with self.assertRaises(ValueError):
+            PolicyReference("", "https://example.com")
+        with self.assertRaises(ValueError):
+            PolicyReference("Reference", "ftp://example.com")
+
+    def test_metric_requirements_are_serialized(self) -> None:
+        designer = (
+            PolicyDesigner("model-quality")
+            .state("evaluation")
+            .require_metric("recall", 0.8)
+            .require_metrics(
+                ("precision", "f1_score"),
+                (0.5, 0.8),
+            )
+            .end()
+        )
+
+        with TemporaryDirectory() as directory:
+            content = designer.execute(
+                "model_quality.yml",
+                output_dir=directory,
+            ).read_text(encoding="utf-8")
+
+        self.assertIn('type: "require_metric"', content)
+        self.assertIn('metric: "recall"', content)
+        self.assertIn("minimum: 0.8", content)
+        self.assertIn('type: "require_metrics"', content)
+        self.assertIn("metrics:", content)
+        self.assertIn("precision: 0.5", content)
+        self.assertIn("f1_score: 0.8", content)
+
+    def test_metric_requirement_validation(self) -> None:
+        state = PolicyDesigner("model-quality").state("evaluation")
+
+        with self.assertRaises(TypeError):
+            state.require_metric("recall", True)
+        with self.assertRaises(ValueError):
+            state.require_metric("recall", 1.1)
+        with self.assertRaises(ValueError):
+            state.require_metrics(("recall",), (0.5, 0.8))
+        with self.assertRaises(ValueError):
+            state.require_metrics(
+                ("recall", "recall"),
+                (0.5, 0.8),
+            )
+        with self.assertRaises(TypeError):
+            state.require_metrics("recall", (0.8,))
 
 
 if __name__ == "__main__":

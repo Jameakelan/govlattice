@@ -38,8 +38,33 @@ class YamlBuilder:
         )
         self._append_named_value(
             lines,
+            "severity",
+            self._policy.severity.value,
+            indent=2,
+        )
+        self._append_named_value(
+            lines,
             "tags",
             self._policy.tags,
+            indent=2,
+        )
+        self._append_named_value(
+            lines,
+            "lifecycle_stages",
+            self._policy.lifecycle_stages,
+            indent=2,
+        )
+        references = tuple(
+            {
+                "title": reference.title,
+                "url": reference.url,
+            }
+            for reference in self._policy.references
+        )
+        self._append_named_value(
+            lines,
+            "references",
+            references,
             indent=2,
         )
         if self._policy.created_at is not None:
@@ -120,24 +145,18 @@ class YamlBuilder:
 
         lines.append(f"{prefix}requirements:")
         item_prefix = " " * (indent + 2)
-        value_prefix = " " * (indent + 4)
-        list_prefix = " " * (indent + 6)
         for requirement in requirements:
             lines.append(
                 f"{item_prefix}- type: "
                 f"{self._scalar(requirement.type)}"
             )
             for name, value in requirement.parameters.items():
-                if isinstance(value, tuple):
-                    lines.append(f"{value_prefix}{name}:")
-                    for item in value:
-                        lines.append(
-                            f"{list_prefix}- {self._scalar(item)}"
-                        )
-                else:
-                    lines.append(
-                        f"{value_prefix}{name}: {self._scalar(value)}"
-                    )
+                self._append_named_value(
+                    lines,
+                    name,
+                    value,
+                    indent=indent + 4,
+                )
 
     def _append_named_value(
         self,

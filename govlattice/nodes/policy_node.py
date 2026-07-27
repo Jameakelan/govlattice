@@ -6,13 +6,18 @@ from typing import Optional
 from typing import Sequence
 
 from govlattice.nodes.state_node import StateNode
+from govlattice.nodes.policy_reference_node import PolicyReference
+from govlattice.severity import SeverityLevel
 
 
 class PolicyNode:
     __slots__ = (
         "name",
         "enabled",
+        "severity",
         "tags",
+        "lifecycle_stages",
+        "references",
         "created_at",
         "updated_at",
         "metadata",
@@ -23,14 +28,23 @@ class PolicyNode:
         self,
         name: str,
         enabled: bool,
+        severity: SeverityLevel,
         tags: Sequence[str],
+        lifecycle_stages: Sequence[str],
+        references: Sequence[PolicyReference],
         created_at: Optional[str],
         updated_at: Optional[str],
         metadata: Mapping[str, Any],
     ) -> None:
         self.name = name
         self.enabled = self._validate_enabled(enabled)
-        self.tags = self._validate_tags(tags)
+        self.severity = self._validate_severity(severity)
+        self.tags = self._validate_string_sequence("tags", tags)
+        self.lifecycle_stages = self._validate_string_sequence(
+            "lifecycle_stages",
+            lifecycle_stages,
+        )
+        self.references = self._validate_references(references)
         self.created_at = self._validate_timestamp(
             "created_at",
             created_at,
@@ -50,24 +64,63 @@ class PolicyNode:
         return enabled
 
     @staticmethod
-    def _validate_tags(tags: Sequence[str]) -> tuple[str, ...]:
-        if isinstance(tags, (str, bytes)) or not isinstance(
-            tags,
+    def _validate_severity(
+        severity: SeverityLevel,
+    ) -> SeverityLevel:
+        if not isinstance(severity, SeverityLevel):
+            raise TypeError("severity must be a SeverityLevel")
+        return severity
+
+    @staticmethod
+    def _validate_string_sequence(
+        name: str,
+        values: Sequence[str],
+    ) -> tuple[str, ...]:
+        if isinstance(values, (str, bytes)) or not isinstance(
+            values,
             (list, tuple),
         ):
-            raise TypeError("tags must be a list or tuple of strings")
+            raise TypeError(
+                f"{name} must be a list or tuple of strings"
+            )
 
         normalized: list[str] = []
         seen: set[str] = set()
-        for tag in tags:
-            if not isinstance(tag, str):
-                raise TypeError("tags must contain only strings")
-            tag = tag.strip()
-            if not tag:
-                raise ValueError("tags must not contain empty strings")
-            if tag not in seen:
-                normalized.append(tag)
-                seen.add(tag)
+        for value in values:
+            if not isinstance(value, str):
+                raise TypeError(f"{name} must contain only strings")
+            value = value.strip()
+            if not value:
+                raise ValueError(
+                    f"{name} must not contain empty strings"
+                )
+            if value not in seen:
+                normalized.append(value)
+                seen.add(value)
+        return tuple(normalized)
+
+    @staticmethod
+    def _validate_references(
+        references: Sequence[PolicyReference],
+    ) -> tuple[PolicyReference, ...]:
+        if isinstance(references, (str, bytes)) or not isinstance(
+            references,
+            (list, tuple),
+        ):
+            raise TypeError(
+                "references must be a list or tuple of PolicyReference"
+            )
+
+        normalized: list[PolicyReference] = []
+        seen_urls: set[str] = set()
+        for reference in references:
+            if not isinstance(reference, PolicyReference):
+                raise TypeError(
+                    "references must contain only PolicyReference"
+                )
+            if reference.url not in seen_urls:
+                normalized.append(reference)
+                seen_urls.add(reference.url)
         return tuple(normalized)
 
     @classmethod
@@ -124,7 +177,10 @@ class PolicyNode:
         reserved = {
             "name",
             "enabled",
+            "severity",
             "tags",
+            "lifecycle_stages",
+            "references",
             "created_at",
             "updated_at",
             "states",

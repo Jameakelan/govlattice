@@ -1,4 +1,5 @@
 from typing import TYPE_CHECKING
+from typing import Sequence
 
 from govlattice.builder import Builder
 from govlattice.builder.segment_builder import SegmentBuilder
@@ -69,6 +70,26 @@ class StateBuilder(Builder):
     ) -> "StateBuilder":
         self._node.requirements.append(
             RequirementNode.range(column, minimum, maximum)
+        )
+        return self
+
+    def require_metric(
+        self,
+        metric: str,
+        minimum: Number,
+    ) -> "StateBuilder":
+        self._node.requirements.append(
+            RequirementNode.metric(metric, minimum)
+        )
+        return self
+
+    def require_metrics(
+        self,
+        metrics: Sequence[str],
+        minimums: Sequence[Number],
+    ) -> "StateBuilder":
+        self._node.requirements.append(
+            RequirementNode.metrics(metrics, minimums)
         )
         return self
 

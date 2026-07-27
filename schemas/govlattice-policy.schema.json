@@ -12,14 +12,17 @@
   "properties": {
     "schema_version": {
       "type": "string",
-      "const": "1.2.0"
+      "const": "1.4.0"
     },
     "policy": {
       "type": "object",
       "required": [
         "name",
         "enabled",
+        "severity",
         "tags",
+        "lifecycle_stages",
+        "references",
         "states"
       ],
       "additionalProperties": {
@@ -38,12 +41,35 @@
         "enabled": {
           "type": "boolean"
         },
+        "severity": {
+          "enum": [
+            "info",
+            "low",
+            "medium",
+            "high",
+            "critical"
+          ]
+        },
         "tags": {
           "type": "array",
           "uniqueItems": true,
           "items": {
             "type": "string",
             "minLength": 1
+          }
+        },
+        "lifecycle_stages": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "references": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/policy_reference"
           }
         },
         "created_at": {
@@ -64,6 +90,25 @@
     }
   },
   "$defs": {
+    "policy_reference": {
+      "type": "object",
+      "required": [
+        "title",
+        "url"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "title": {
+          "type": "string",
+          "minLength": 1
+        },
+        "url": {
+          "type": "string",
+          "format": "uri",
+          "pattern": "^https?://"
+        }
+      }
+    },
     "metadata_value": {
       "anyOf": [
         {
@@ -163,6 +208,12 @@
         },
         {
           "$ref": "#/$defs/range_requirement"
+        },
+        {
+          "$ref": "#/$defs/metric_requirement"
+        },
+        {
+          "$ref": "#/$defs/metrics_requirement"
         }
       ]
     },
@@ -236,6 +287,51 @@
         },
         "maximum": {
           "type": "number"
+        }
+      }
+    },
+    "metric_requirement": {
+      "type": "object",
+      "required": [
+        "type",
+        "metric",
+        "minimum"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "require_metric"
+        },
+        "metric": {
+          "type": "string",
+          "minLength": 1
+        },
+        "minimum": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        }
+      }
+    },
+    "metrics_requirement": {
+      "type": "object",
+      "required": [
+        "type",
+        "metrics"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "require_metrics"
+        },
+        "metrics": {
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          }
         }
       }
     }

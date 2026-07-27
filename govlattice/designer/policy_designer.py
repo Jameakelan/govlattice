@@ -8,7 +8,9 @@ from govlattice.builder.state_builder import StateBuilder
 from govlattice.builder.yaml_builder import YamlBuilder
 from govlattice.designer import Designer
 from govlattice.nodes.policy_node import PolicyNode
+from govlattice.nodes.policy_reference_node import PolicyReference
 from govlattice.nodes.state_node import StateNode
+from govlattice.severity import SeverityLevel
 
 
 class PolicyDesigner(Designer):
@@ -19,7 +21,10 @@ class PolicyDesigner(Designer):
         policy_name: str,
         *,
         enabled: bool = True,
+        severity: SeverityLevel = SeverityLevel.MEDIUM,
         tags: Sequence[str] = (),
+        lifecycle_stages: Sequence[str] = (),
+        references: Sequence[PolicyReference] = (),
         created_at: Optional[str] = None,
         updated_at: Optional[str] = None,
         **metadata: Any,
@@ -28,7 +33,10 @@ class PolicyDesigner(Designer):
         self._policy = PolicyNode(
             name=self.policy_name,
             enabled=enabled,
+            severity=severity,
             tags=tags,
+            lifecycle_stages=lifecycle_stages,
+            references=references,
             created_at=created_at,
             updated_at=updated_at,
             metadata=metadata,
@@ -47,6 +55,18 @@ class PolicyDesigner(Designer):
             node = StateNode(state_id)
             self._policy.states[state_id] = node
         return StateBuilder(self, node)
+
+    @property
+    def enabled(self) -> bool:
+        return self._policy.enabled
+
+    @property
+    def severity(self) -> SeverityLevel:
+        return self._policy.severity
+
+    @property
+    def references(self) -> tuple[PolicyReference, ...]:
+        return self._policy.references
 
     def execute(
         self,
