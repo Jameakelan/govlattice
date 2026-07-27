@@ -27,8 +27,8 @@ The current system can:
 - Verify policies and enforce workflow boundaries.
 
 GovLattice currently defines, exports, reads, verifies, and enforces policies
-against record-based datasets. Native dataframe/database adapters are not
-implemented yet.
+against record-based and Pandas datasets. Native Polars, Spark, and SQL
+adapters are not implemented yet.
 
 ## 2. Current Versions
 
@@ -37,7 +37,7 @@ The package root exposes three version constants:
 ```python
 import govlattice
 
-govlattice.__version__              # "0.11.0"
+govlattice.__version__              # "0.12.0"
 govlattice.__schema_version__       # "1.6.0"
 govlattice.__pack_schema_version__  # "1.2.0"
 ```
@@ -70,6 +70,7 @@ from govlattice import (
     PolicyReference,
     PolicyPackReader,
     PolicyReader,
+    PandasDatasetAdapter,
     SeverityLevel,
     RecordsDatasetAdapter,
 )
@@ -928,11 +929,16 @@ and execution information. Duplicate registrations require an explicit
 ### Dataset adapters
 
 The engine depends on the runtime-checkable `DatasetAdapter` protocol rather
-than Pandas or another data framework. `RecordsDatasetAdapter` is the first
-built-in implementation and accepts a list or tuple of mapping records.
+than a specific data framework. `RecordsDatasetAdapter` accepts a list or
+tuple of mapping records. `PandasDatasetAdapter` accepts a defensive copy of a
+DataFrame and is available through the optional `requirements-pandas.txt`
+dependency set.
 
-Future Pandas, Polars, Spark, and SQL adapters can implement the same protocol
-without changing engine or evaluator logic.
+The Pandas adapter requires unique, non-empty string columns. It preserves
+column order and normalizes `NaN`, `NaT`, and `pd.NA` to `None`, keeping
+missing-value behavior consistent with the records adapter. Future Polars,
+Spark, and SQL adapters can implement the same protocol without changing
+engine or evaluator logic.
 
 ### Actor and execution provenance
 
@@ -1025,6 +1031,7 @@ govlattice/
 │   └── policy_pack_validator.py    Pack contract checks
 ├── adapter/
 │   ├── dataset_adapter.py          DatasetAdapter protocol
+│   ├── pandas_dataset_adapter.py   Optional Pandas adapter
 │   └── records_dataset_adapter.py  Built-in records adapter
 ├── evaluator/
 │   ├── builtin/                    One evaluator per requirement type
@@ -1035,7 +1042,7 @@ govlattice/
 │   ├── requirement_evaluator.py    Evaluator protocol and result
 │   └── builtin_evaluators.py       Backward-compatible import facade
 ├── engine/
-│   └── govlattice_engine.py        Verify workflow orchestration
+│   └── govlattice_engine.py        Verify/enforce orchestration
 ├── designer/            Top-level policy and pack APIs
 ├── builder/             Fluent builders and YAML serializers
 ├── nodes/               Internal domain representation
@@ -1147,6 +1154,8 @@ python dev/dev_pack_eu_ai_act.py
 python dev/dev_policy_reader.py
 python dev/dev_policy_pack_reader.py
 python dev/dev_engine_verify.py
+python dev/dev_engine_enforce.py
+python -m dev.dev_pandas_adapter
 ```
 
 Without activating the environment:
@@ -1174,6 +1183,10 @@ Current examples:
   generated policy pack.
 - `dev/dev_engine_verify.py`: Record-based policy verification with actor
   provenance.
+- `dev/dev_engine_enforce.py`: Allowed and blocked enforcement workflows with
+  complete evaluation results.
+- `dev/dev_pandas_adapter.py`: Policy verification against a Pandas
+  DataFrame.
 
 The existing filename `dev_policy_desinger.py` contains the spelling
 `desinger`; this section intentionally reflects the current repository name.
@@ -1183,6 +1196,12 @@ Runtime dependencies:
 ```text
 PyYAML>=6.0,<7
 jsonschema>=4.0,<5
+```
+
+Optional Pandas dependencies:
+
+```text
+pandas>=2.0,<4
 ```
 
 ## 17. Testing Expectations
@@ -1217,7 +1236,7 @@ The following features are not implemented and must not be presented as
 available:
 
 - Direct evaluation of a `PolicyPackDefinition`.
-- Native Pandas, Polars, Spark, and SQL adapters.
+- Native Polars, Spark, and SQL adapters.
 - Reading older policy schemas through migrations.
 - Nested segments.
 - Conditions other than `between`.

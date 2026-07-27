@@ -1,8 +1,9 @@
-__version__ = "0.11.0"
+__version__ = "0.12.0"
 __schema_version__ = "1.6.0"
 __pack_schema_version__ = "1.2.0"
 
 from govlattice.adapter import DatasetAdapter
+from govlattice.adapter import PandasDatasetAdapter
 from govlattice.adapter import RecordsDatasetAdapter
 from govlattice.engine import GovLatticeEngine
 from govlattice.enum import ActorType
@@ -61,6 +62,7 @@ __all__ = [
     "ExecutionContext",
     "GovLatticeEngine",
     "GovLatticeEngineError",
+    "PandasDatasetAdapter",
     "PolicyReference",
     "PolicyDefinition",
     "PolicyDesigner",

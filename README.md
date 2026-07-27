@@ -8,8 +8,8 @@ conditional segments, lifecycle metadata, external references, and reusable
 policy packs. The generated YAML is designed for Git-based review and sharing
 across teams.
 
-> GovLattice can verify and enforce policies against record-based datasets.
-> Native Pandas, Polars, Spark, or SQL adapters are not implemented yet.
+> GovLattice can verify and enforce policies against record and Pandas
+> datasets. Native Polars, Spark, or SQL adapters are not implemented yet.
 
 ## Features
 
@@ -25,6 +25,7 @@ across teams.
 - Safe, schema-validated policy reading
 - Policy verification with immutable audit results
 - Adapter-based datasets and optional actor provenance
+- Optional Pandas DataFrame adapter
 - Workflow-blocking enforcement with complete audit results
 - Deterministic YAML with atomic file writes
 - JSON Schemas for policy and pack output
@@ -34,7 +35,7 @@ across teams.
 ```python
 import govlattice
 
-print(govlattice.__version__)              # 0.11.0
+print(govlattice.__version__)              # 0.12.0
 print(govlattice.__schema_version__)       # 1.6.0
 print(govlattice.__pack_schema_version__)  # 1.2.0
 ```
@@ -49,6 +50,13 @@ python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install -r requirements.txt
 python -m unittest discover -s tests -v
+```
+
+Install optional Pandas support when evaluating DataFrames:
+
+```bash
+python -m pip install -r requirements-pandas.txt
+python -m dev.dev_pandas_adapter
 ```
 
 Run commands from the repository root so Python can resolve the local
@@ -506,9 +514,35 @@ EvaluationStatus.SKIPPED
 EvaluationStatus.ERROR
 ```
 
-The initial adapter is `RecordsDatasetAdapter`, which accepts a list or tuple
-of mapping records. `DatasetAdapter` is a runtime-checkable protocol for
-future Pandas, Polars, Spark, or SQL adapters.
+`RecordsDatasetAdapter` accepts a list or tuple of mapping records.
+`PandasDatasetAdapter` accepts a DataFrame and is available after installing
+`requirements-pandas.txt`:
+
+```python
+import pandas as pd
+
+from govlattice import EvaluationContext
+from govlattice import GovLatticeEngine
+from govlattice import PandasDatasetAdapter
+
+dataframe = pd.DataFrame(
+    [
+        {"id": 1, "age": 30},
+        {"id": 2, "age": 65},
+    ]
+)
+
+result = GovLatticeEngine().verify(
+    policy,
+    state="validated_dataset",
+    context=EvaluationContext(PandasDatasetAdapter(dataframe)),
+)
+```
+
+The adapter takes a defensive DataFrame copy, requires unique string column
+names, preserves row and column order, and normalizes `NaN`, `NaT`, and
+`pd.NA` to `None`. `DatasetAdapter` remains the runtime-checkable extension
+contract for future Polars, Spark, or SQL adapters.
 
 Built-in evaluators support all current requirement types. Custom evaluators
 can be registered through `GovLatticeEngine.register_evaluator()`.
@@ -629,6 +663,7 @@ Run the examples:
 .venv/bin/python dev/dev_policy_reader.py
 .venv/bin/python dev/dev_policy_pack_reader.py
 .venv/bin/python dev/dev_engine_verify.py
+.venv/bin/python dev/dev_engine_enforce.py
 ```
 
 Generated files are written under `policies/`, which is ignored by Git.
