@@ -21,7 +21,16 @@ def define_single_policy() -> None:
 
 def define_multiple_states_in_policy() -> None:
     policy = (
-        PolicyDesigner(policy_name="A10-health-policy")
+        PolicyDesigner(
+            policy_name="A10-health-policy",
+            enabled=True,
+            tags=("health", "integration-test"),
+            created_at="2026-07-01T09:00:00+07:00",
+            updated_at="2026-07-27T17:30:00+07:00",
+            agile_stage="testing",
+            sprint="sprint-12",
+            owner="data-quality-team",
+        )
         .state("raw_dataset")
             .require_columns("id", "name", "age", "hba1c")
         .end()
@@ -36,7 +45,7 @@ def define_multiple_states_in_policy() -> None:
                 .require_missing_rate("hba1c", maximum=0.02)
                 .require_range("hba1c", minimum=4.0, maximum=12.0)
             .end()
-            .verify_overlap_range()
+            .verify_overlap_range("age")
         .end()
     )
     

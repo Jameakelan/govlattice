@@ -72,8 +72,8 @@ class StateBuilder(Builder):
         )
         return self
 
-    def verify_overlap_range(self) -> "StateBuilder":
-        RangeOverlapVerifier().verify(self._node)
+    def verify_overlap_range(self, column: str) -> "StateBuilder":
+        RangeOverlapVerifier(column).verify(self._node)
         return self
 
     def end(self) -> "PolicyDesigner":

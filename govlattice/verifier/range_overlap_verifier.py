@@ -9,24 +9,36 @@ class OverlapRangeError(ValueError):
 
 
 class RangeOverlapVerifier(StateVerifier):
-    __slots__ = ()
+    __slots__ = ("_column",)
+
+    def __init__(self, column: str) -> None:
+        if not isinstance(column, str):
+            raise TypeError("verification column must be a string")
+        column = column.strip()
+        if not column:
+            raise ValueError("verification column must not be empty")
+        self._column = column
 
     def verify(self, state: StateNode) -> None:
-        ranges_by_column: dict[
-            str,
-            list[tuple[SegmentNode, ConditionNode]],
-        ] = {}
+        ranges: list[tuple[SegmentNode, ConditionNode]] = []
 
         for segment in state.segments.values():
             condition = segment.condition
-            if condition is None or condition.type != "between":
+            if (
+                condition is None
+                or condition.type != "between"
+                or condition.column != self._column
+            ):
                 continue
-            ranges_by_column.setdefault(condition.column, []).append(
-                (segment, condition)
+            ranges.append((segment, condition))
+
+        if not ranges:
+            raise ValueError(
+                f'No between conditions found for column "{self._column}" '
+                f'in state "{state.name}"'
             )
 
-        for column, ranges in ranges_by_column.items():
-            self._verify_column(state, column, ranges)
+        self._verify_column(state, self._column, ranges)
 
     @staticmethod
     def _verify_column(

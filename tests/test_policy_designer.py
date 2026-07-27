@@ -11,8 +11,8 @@ from govlattice.verifier.range_overlap_verifier import OverlapRangeError
 
 class PolicyDesignerTests(unittest.TestCase):
     def test_public_versions(self) -> None:
-        self.assertEqual(govlattice.__version__, "0.2.0")
-        self.assertEqual(govlattice.__schema_version__, "1.1.0")
+        self.assertEqual(govlattice.__version__, "0.3.0")
+        self.assertEqual(govlattice.__schema_version__, "1.2.0")
 
     def test_json_schema_uses_public_schema_version(self) -> None:
         schema_path = (
@@ -141,9 +141,11 @@ class PolicyDesignerTests(unittest.TestCase):
             self.assertEqual(
                 output.read_text(encoding="utf-8"),
                 (
-                    'schema_version: "1.1.0"\n'
+                    'schema_version: "1.2.0"\n'
                     "policy:\n"
                     '  name: "A10-health-policy"\n'
+                    "  enabled: true\n"
+                    "  tags: []\n"
                     "  states:\n"
                     '    "dataset":\n'
                     "      requirements:\n"
@@ -167,9 +169,11 @@ class PolicyDesignerTests(unittest.TestCase):
             self.assertEqual(
                 output.read_text(encoding="utf-8"),
                 (
-                    'schema_version: "1.1.0"\n'
+                    'schema_version: "1.2.0"\n'
                     'policy:\n'
                     '  name: "health-policy"\n'
+                    '  enabled: true\n'
+                    '  tags: []\n'
                     '  states: {}\n'
                 ),
             )
@@ -235,7 +239,7 @@ class PolicyDesignerTests(unittest.TestCase):
             .when_between("age", minimum=60, maximum=100)
             .require_missing_rate("hba1c", maximum=0.02)
             .end()
-            .verify_overlap_range()
+            .verify_overlap_range("age")
             .end()
         )
 
@@ -268,7 +272,7 @@ class PolicyDesignerTests(unittest.TestCase):
             .when_between("age", 10, 20)
             .end()
         )
-        first_state.verify_overlap_range()
+        first_state.verify_overlap_range("age")
 
         second_state = first_state.end().state("second")
         (
@@ -277,7 +281,7 @@ class PolicyDesignerTests(unittest.TestCase):
             .end()
         )
 
-        second_state.verify_overlap_range()
+        second_state.verify_overlap_range("age")
 
     def test_overlap_verification_rejects_overlapping_segments(self) -> None:
         state = PolicyDesigner("health-policy").state("dataset")
@@ -288,7 +292,7 @@ class PolicyDesignerTests(unittest.TestCase):
             OverlapRangeError,
             'state "dataset".*segment "first".*segment "second"',
         ):
-            state.verify_overlap_range()
+            state.verify_overlap_range("age")
 
     def test_overlap_verification_treats_boundaries_as_inclusive(self) -> None:
         state = PolicyDesigner("health-policy").state("dataset")
@@ -296,14 +300,35 @@ class PolicyDesignerTests(unittest.TestCase):
         state.segment("second").when_between("age", 20, 30).end()
 
         with self.assertRaises(OverlapRangeError):
-            state.verify_overlap_range()
+            state.verify_overlap_range("age")
 
     def test_overlap_verification_groups_ranges_by_column(self) -> None:
         state = PolicyDesigner("health-policy").state("dataset")
         state.segment("age").when_between("age", 10, 20).end()
         state.segment("score").when_between("score", 15, 30).end()
 
-        self.assertIs(state.verify_overlap_range(), state)
+        self.assertIs(state.verify_overlap_range("age"), state)
+
+    def test_overlap_verification_only_checks_selected_column(self) -> None:
+        state = PolicyDesigner("health-policy").state("dataset")
+        state.segment("age-a").when_between("age", 10, 20).end()
+        state.segment("age-b").when_between("age", 21, 30).end()
+        state.segment("score-a").when_between("score", 10, 20).end()
+        state.segment("score-b").when_between("score", 15, 30).end()
+
+        self.assertIs(state.verify_overlap_range("age"), state)
+        with self.assertRaises(OverlapRangeError):
+            state.verify_overlap_range("score")
+
+    def test_overlap_verification_rejects_unknown_column(self) -> None:
+        state = PolicyDesigner("health-policy").state("dataset")
+        state.segment("adult").when_between("age", 18, 59).end()
+
+        with self.assertRaisesRegex(
+            ValueError,
+            'No between conditions found for column "score"',
+        ):
+            state.verify_overlap_range("score")
 
     def test_missing_rate_validation(self) -> None:
         state = PolicyDesigner("health-policy").state("dataset")
@@ -338,6 +363,85 @@ class PolicyDesignerTests(unittest.TestCase):
 
         with self.assertRaisesRegex(ValueError, "requires a condition"):
             segment.end()
+
+    def test_policy_lifecycle_metadata_is_serialized(self) -> None:
+        designer = PolicyDesigner(
+            "health-policy",
+            enabled=False,
+            tags=("health", "testing", "health"),
+            created_at="2026-07-01T09:00:00+07:00",
+            updated_at="2026-07-27T17:30:00+07:00",
+            agile={
+                "stage": "testing",
+                "sprint": 12,
+            },
+            reviewers=["alice", "bob"],
+            nullable=None,
+        )
+
+        with TemporaryDirectory() as directory:
+            output = designer.execute(
+                "health_policy.yml",
+                output_dir=directory,
+            )
+            content = output.read_text(encoding="utf-8")
+
+        self.assertEqual(
+            content,
+            (
+                'schema_version: "1.2.0"\n'
+                "policy:\n"
+                '  name: "health-policy"\n'
+                "  enabled: false\n"
+                "  tags:\n"
+                '    - "health"\n'
+                '    - "testing"\n'
+                '  created_at: "2026-07-01T09:00:00+07:00"\n'
+                '  updated_at: "2026-07-27T17:30:00+07:00"\n'
+                "  agile:\n"
+                '    stage: "testing"\n'
+                "    sprint: 12\n"
+                "  reviewers:\n"
+                '    - "alice"\n'
+                '    - "bob"\n'
+                "  nullable: null\n"
+                "  states: {}\n"
+            ),
+        )
+
+    def test_policy_lifecycle_metadata_validation(self) -> None:
+        with self.assertRaises(TypeError):
+            PolicyDesigner("health-policy", enabled=1)
+        with self.assertRaises(TypeError):
+            PolicyDesigner("health-policy", tags="health")
+        with self.assertRaises(ValueError):
+            PolicyDesigner("health-policy", tags=(" ",))
+        with self.assertRaises(ValueError):
+            PolicyDesigner(
+                "health-policy",
+                created_at="2026-07-01T09:00:00",
+            )
+        with self.assertRaises(ValueError):
+            PolicyDesigner(
+                "health-policy",
+                created_at="2026-07-28T09:00:00Z",
+                updated_at="2026-07-27T09:00:00Z",
+            )
+        with self.assertRaises(ValueError):
+            PolicyDesigner(
+                "health-policy",
+                **{"states": "invalid"},
+            )
+        with self.assertRaises(TypeError):
+            PolicyDesigner(
+                "health-policy",
+                custom=object(),
+            )
+        with self.assertRaises(ValueError):
+            PolicyDesigner(
+                "health-policy",
+                custom=float("nan"),
+            )
 
 
 if __name__ == "__main__":

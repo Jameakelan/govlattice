@@ -1,5 +1,6 @@
 import json
 from pathlib import Path
+import re
 from typing import Any
 from typing import Union
 
@@ -28,8 +29,36 @@ class YamlBuilder:
             f"schema_version: {self._scalar(__schema_version__)}",
             "policy:",
             f"  name: {self._scalar(self._policy.name)}",
-            "  states:",
         ]
+        self._append_named_value(
+            lines,
+            "enabled",
+            self._policy.enabled,
+            indent=2,
+        )
+        self._append_named_value(
+            lines,
+            "tags",
+            self._policy.tags,
+            indent=2,
+        )
+        if self._policy.created_at is not None:
+            self._append_named_value(
+                lines,
+                "created_at",
+                self._policy.created_at,
+                indent=2,
+            )
+        if self._policy.updated_at is not None:
+            self._append_named_value(
+                lines,
+                "updated_at",
+                self._policy.updated_at,
+                indent=2,
+            )
+        for name, value in self._policy.metadata.items():
+            self._append_named_value(lines, name, value, indent=2)
+        lines.append("  states:")
 
         if not self._policy.states:
             lines[-1] = "  states: {}"
@@ -110,6 +139,64 @@ class YamlBuilder:
                         f"{value_prefix}{name}: {self._scalar(value)}"
                     )
 
+    def _append_named_value(
+        self,
+        lines: list[str],
+        name: str,
+        value: Any,
+        indent: int,
+    ) -> None:
+        prefix = " " * indent
+        key = self._key(name)
+        if isinstance(value, dict):
+            if not value:
+                lines.append(f"{prefix}{key}: {{}}")
+                return
+            lines.append(f"{prefix}{key}:")
+            for child_name, child_value in value.items():
+                self._append_named_value(
+                    lines,
+                    child_name,
+                    child_value,
+                    indent=indent + 2,
+                )
+            return
+        if isinstance(value, (list, tuple)):
+            if not value:
+                lines.append(f"{prefix}{key}: []")
+                return
+            lines.append(f"{prefix}{key}:")
+            self._append_sequence(lines, value, indent=indent + 2)
+            return
+        lines.append(f"{prefix}{key}: {self._scalar(value)}")
+
+    def _append_sequence(
+        self,
+        lines: list[str],
+        values: Union[list[Any], tuple[Any, ...]],
+        indent: int,
+    ) -> None:
+        prefix = " " * indent
+        for value in values:
+            if isinstance(value, dict):
+                lines.append(f"{prefix}-")
+                for name, child_value in value.items():
+                    self._append_named_value(
+                        lines,
+                        name,
+                        child_value,
+                        indent=indent + 2,
+                    )
+            elif isinstance(value, (list, tuple)):
+                lines.append(f"{prefix}-")
+                self._append_sequence(
+                    lines,
+                    value,
+                    indent=indent + 2,
+                )
+            else:
+                lines.append(f"{prefix}- {self._scalar(value)}")
+
     def write(
         self,
         file_name: Union[str, Path],
@@ -127,4 +214,10 @@ class YamlBuilder:
     def _scalar(value: Any) -> str:
         # JSON strings are valid YAML 1.2 scalars and safely preserve special
         # characters without requiring an external YAML dependency.
+        return json.dumps(value, ensure_ascii=False)
+
+    @staticmethod
+    def _key(value: str) -> str:
+        if re.fullmatch(r"[A-Za-z_][A-Za-z0-9_-]*", value):
+            return value
         return json.dumps(value, ensure_ascii=False)

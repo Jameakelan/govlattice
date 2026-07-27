@@ -1,4 +1,7 @@
 from pathlib import Path
+from typing import Any
+from typing import Optional
+from typing import Sequence
 from typing import Union
 
 from govlattice.builder.state_builder import StateBuilder
@@ -11,9 +14,25 @@ from govlattice.nodes.state_node import StateNode
 class PolicyDesigner(Designer):
     __slots__ = ("_policy",)
 
-    def __init__(self, policy_name: str) -> None:
+    def __init__(
+        self,
+        policy_name: str,
+        *,
+        enabled: bool = True,
+        tags: Sequence[str] = (),
+        created_at: Optional[str] = None,
+        updated_at: Optional[str] = None,
+        **metadata: Any,
+    ) -> None:
         super().__init__(policy_name)
-        self._policy = PolicyNode(self.policy_name)
+        self._policy = PolicyNode(
+            name=self.policy_name,
+            enabled=enabled,
+            tags=tags,
+            created_at=created_at,
+            updated_at=updated_at,
+            metadata=metadata,
+        )
 
     def state(self, id: str) -> StateBuilder:
         if not isinstance(id, str):

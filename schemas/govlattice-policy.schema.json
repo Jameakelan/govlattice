@@ -12,19 +12,47 @@
   "properties": {
     "schema_version": {
       "type": "string",
-      "const": "1.1.0"
+      "const": "1.2.0"
     },
     "policy": {
       "type": "object",
       "required": [
         "name",
+        "enabled",
+        "tags",
         "states"
       ],
-      "additionalProperties": false,
+      "additionalProperties": {
+        "$ref": "#/$defs/metadata_value"
+      },
+      "propertyNames": {
+        "not": {
+          "const": "schema_version"
+        }
+      },
       "properties": {
         "name": {
           "type": "string",
           "minLength": 1
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "tags": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updated_at": {
+          "type": "string",
+          "format": "date-time"
         },
         "states": {
           "type": "object",
@@ -36,6 +64,30 @@
     }
   },
   "$defs": {
+    "metadata_value": {
+      "anyOf": [
+        {
+          "type": [
+            "string",
+            "number",
+            "boolean",
+            "null"
+          ]
+        },
+        {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/metadata_value"
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/metadata_value"
+          }
+        }
+      ]
+    },
     "state": {
       "type": "object",
       "required": [
