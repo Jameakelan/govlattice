@@ -37,7 +37,7 @@ The package root exposes three version constants:
 ```python
 import govlattice
 
-govlattice.__version__              # "0.12.0"
+govlattice.__version__              # "0.13.0"
 govlattice.__schema_version__       # "1.6.0"
 govlattice.__pack_schema_version__  # "1.2.0"
 ```
@@ -959,6 +959,11 @@ with generated start/completion timestamps and duration.
 The exception exposes the same result through `error.result`; requirement
 evaluation is never duplicated.
 
+Every `PolicyEvaluationResult` can render a self-contained, escaped HTML
+document with `to_html()` or atomically write one with
+`write_html("output/report.html")`. Reports include summary counts, execution
+provenance, actor context, and detailed requirement findings.
+
 ## 14. Architecture and Responsibilities
 
 The main data flow is:
@@ -1044,7 +1049,9 @@ govlattice/
 ├── engine/
 │   └── govlattice_engine.py        Verify/enforce orchestration
 ├── designer/            Top-level policy and pack APIs
-├── builder/             Fluent builders and YAML serializers
+├── builder/
+│   ├── html_report_builder.py  Self-contained evaluation reports
+│   └── ...                     Fluent builders and YAML serializers
 ├── nodes/               Internal domain representation
 ├── verifier/            Policy and pack validation rules
 └── utils/helper/        Reusable filesystem helpers

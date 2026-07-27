@@ -35,7 +35,7 @@ across teams.
 ```python
 import govlattice
 
-print(govlattice.__version__)              # 0.12.0
+print(govlattice.__version__)              # 0.13.0
 print(govlattice.__schema_version__)       # 1.6.0
 print(govlattice.__pack_schema_version__)  # 1.2.0
 ```
@@ -618,6 +618,26 @@ except PolicyEnforcementError as error:
 `PASSED` and `SKIPPED`, raises `PolicyEnforcementError` for `FAILED`, and
 fails closed by raising the same exception for `ERROR`. The exception exposes
 the immutable evaluation result through `error.result`.
+
+Write any verification or enforcement result as a self-contained HTML report:
+
+```python
+report_path = result.write_html("output/report.html")
+print(report_path)
+```
+
+For a blocked workflow, write the same complete report from the exception:
+
+```python
+except PolicyEnforcementError as error:
+    error.result.write_html("output/report.html")
+    raise
+```
+
+The report includes aggregate status, finding counts, execution and actor
+context, messages, severity, scope, and expandable expected/observed values.
+Its CSS is embedded, so the resulting file can be opened or shared without
+additional assets.
 
 ## YAML Output
 

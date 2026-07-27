@@ -195,6 +195,10 @@ def main() -> None:
     for name, value in metrics.items():
         print(f"- {name}: {value:.4f}")
     print_result("Model policy", model_result)
+    report_path = model_result.write_html(
+        SAMPLE_DIR / "output" / "report.html"
+    )
+    print(f"HTML report: {report_path}")
     print("Workflow allowed: all active policies passed")
 
 

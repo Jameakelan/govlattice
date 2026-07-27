@@ -27,3 +27,4 @@ dist/
 .idea/
 .vscode/
 policies
+samples/iris/output/

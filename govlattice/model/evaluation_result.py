@@ -1,9 +1,11 @@
 """Immutable audit findings and aggregate policy evaluation results."""
 
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 from typing import Mapping
 from typing import Optional
+from typing import Union
 
 from govlattice.enum import EvaluationStatus
 from govlattice.enum import SeverityLevel
@@ -133,6 +135,25 @@ class PolicyEvaluationResult:
             EvaluationStatus.PASSED,
             EvaluationStatus.SKIPPED,
         }
+
+    def to_html(self) -> str:
+        """Render this result as a self-contained HTML document."""
+        from govlattice.builder.html_report_builder import (
+            HtmlReportBuilder,
+        )
+
+        return HtmlReportBuilder(self).build()
+
+    def write_html(
+        self,
+        output_path: Union[str, Path],
+    ) -> Path:
+        """Write a self-contained HTML report and return its resolved path."""
+        from govlattice.builder.html_report_builder import (
+            HtmlReportBuilder,
+        )
+
+        return HtmlReportBuilder(self).write(output_path)
 
     def _count(self, status: EvaluationStatus) -> int:
         """Count findings with one exact status."""

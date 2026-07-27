@@ -47,5 +47,6 @@ The example:
 5. Trains a scaled logistic-regression classifier.
 6. Calculates accuracy, macro precision, macro recall, and macro F1.
 7. Enforces `iris-model-quality.yml` using the calculated metrics.
+8. Writes the model evaluation report to `output/report.html`.
 
 The workflow continues only when both active policies pass.
