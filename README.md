@@ -84,6 +84,8 @@ the `prod` branch. It:
 7. Installs the built wheel in an isolated environment.
 8. Runs an installed-package schema smoke test outside the repository.
 9. Uploads `govlattice-VERSION` as a versioned workflow artifact.
+10. Creates tag `vVERSION` and a GitHub Release containing the wheel and
+    source distribution.
 
 Before pushing a new production revision, update:
 
@@ -92,8 +94,8 @@ Before pushing a new production revision, update:
 __version__ = "0.14.0"
 ```
 
-The workflow builds and stores artifacts but does not publish to PyPI or
-create a GitHub Release.
+The workflow publishes build files to GitHub Releases but does not publish to
+PyPI. A version cannot be reused after its release tag has been created.
 
 ## Samples
 
