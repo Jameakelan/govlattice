@@ -25,8 +25,9 @@ The current system can:
 - Safely read and validate exported policy YAML.
 - Validate inputs before writing files.
 
-GovLattice currently **defines and exports policies**. It does not yet include
-a runtime engine that evaluates a dataset or model against an exported policy.
+GovLattice currently defines, exports, reads, and verifies policies against
+record-based datasets. Enforcement and native dataframe/database adapters are
+not implemented yet.
 
 ## 2. Current Versions
 
@@ -35,7 +36,7 @@ The package root exposes three version constants:
 ```python
 import govlattice
 
-govlattice.__version__              # "0.9.0"
+govlattice.__version__              # "0.10.0"
 govlattice.__schema_version__       # "1.6.0"
 govlattice.__pack_schema_version__  # "1.2.0"
 ```
@@ -56,13 +57,20 @@ The package root exports:
 
 ```python
 from govlattice import (
+    ActorProfile,
+    ActorType,
     ComparisonOperator,
+    EvaluationContext,
+    EvaluationStatus,
+    ExecutionContext,
+    GovLatticeEngine,
     PolicyDesigner,
     PolicyPackDesigner,
     PolicyReference,
     PolicyPackReader,
     PolicyReader,
     SeverityLevel,
+    RecordsDatasetAdapter,
 )
 ```
 
@@ -834,7 +842,115 @@ PolicyPackReadError
 Schema migrations, remote URL loading, lazy policy loading, and policy editing
 are outside the current reader scope.
 
-## 13. Architecture and Responsibilities
+## 13. Policy Verification Engine
+
+`GovLatticeEngine.verify()` evaluates a `PolicyDefinition` against an explicit
+state and `EvaluationContext`:
+
+```python
+from govlattice import (
+    ActorProfile,
+    EvaluationContext,
+    ExecutionContext,
+    GovLatticeEngine,
+    RecordsDatasetAdapter,
+)
+
+context = EvaluationContext(
+    RecordsDatasetAdapter(
+        [
+            {"id": 1, "email": "a@example.com", "age": 30},
+            {"id": 1, "email": "b@example.com", "age": 65},
+        ]
+    ),
+    metrics={"recall": 0.9},
+    execution=ExecutionContext(
+        actor=ActorProfile(
+            "user-1842",
+            display_name="Logan",
+            team="data-quality",
+        ),
+        environment="staging",
+        run_id="run-001",
+    ),
+)
+
+result = GovLatticeEngine().verify(
+    policy,
+    state="validated_dataset",
+    context=context,
+)
+```
+
+`verify()` never raises merely because a requirement fails. It returns a
+`PolicyEvaluationResult` whose status is `PASSED`, `FAILED`, `SKIPPED`, or
+`ERROR`. Invalid API usage such as an unknown state still raises a typed usage
+error.
+
+Current verification semantics:
+
+- A state must be selected explicitly.
+- State requirements use the complete dataset.
+- Segment requirements use records matched by the inclusive `between`
+  condition.
+- `require_unique("id", "email")` uses composite `(id, email)` uniqueness.
+- Range and column comparisons ignore missing values; missingness is governed
+  separately by `require_missing_rate`.
+- Missing metrics, missing evaluation columns, unknown evaluators, and
+  non-comparable values produce `ERROR` findings.
+- An empty state dataset is `ERROR`.
+- An empty segment is `SKIPPED` with `SEGMENT_EMPTY`.
+- A disabled policy is `SKIPPED` with `POLICY_DISABLED`.
+- No actor is required. A missing actor does not skip verification.
+- Overall status precedence is `ERROR`, `FAILED`, `PASSED`, then `SKIPPED`.
+- All requirements are evaluated so a result contains an aggregated report.
+
+Supported built-in evaluators:
+
+```text
+require_columns
+require_unique
+require_missing_rate
+require_range
+require_metric
+require_metrics
+require_column_value
+```
+
+The engine uses an `EvaluatorRegistry`; custom implementations of
+`RequirementEvaluator` can be registered without changing the engine. Each
+evaluator declares its own `requirement_type` and receives a
+`RequirementEvaluationContext` containing the scoped dataset, runtime metrics,
+and execution information. Duplicate registrations require an explicit
+`replace=True`; the legacy two-argument registration API remains supported.
+
+### Dataset adapters
+
+The engine depends on the runtime-checkable `DatasetAdapter` protocol rather
+than Pandas or another data framework. `RecordsDatasetAdapter` is the first
+built-in implementation and accepts a list or tuple of mapping records.
+
+Future Pandas, Polars, Spark, and SQL adapters can implement the same protocol
+without changing engine or evaluator logic.
+
+### Actor and execution provenance
+
+`ActorProfile` supports human, service, and workflow identities. It is
+optional and is audit context rather than an authentication mechanism.
+GovLattice does not verify the actor's identity or roles.
+
+`ExecutionContext` records optional actor, environment, run ID, source, and
+custom metadata. Evaluation results preserve this immutable snapshot together
+with generated start/completion timestamps and duration.
+
+### Verify before enforce
+
+Only `verify()` is implemented. `enforce()` remains intentionally deferred
+until verification results and semantics have been reviewed. The intended
+future behavior is to reuse the same evaluation pipeline and block on
+`FAILED` or `ERROR`.
+
+## 14. Architecture and Responsibilities
 
 The main data flow is:
 
@@ -860,6 +976,14 @@ Pack manifest
 PolicyPackReader
     ↓
 Immutable pack and policy definitions
+
+PolicyDefinition + EvaluationContext
+    ↓
+GovLatticeEngine.verify
+    ├── DatasetAdapter
+    └── EvaluatorRegistry
+            ↓
+    PolicyEvaluationResult
 ```
 
 Directory responsibilities:
@@ -868,13 +992,20 @@ Directory responsibilities:
 govlattice/
 ├── __init__.py          Public exports and version constants
 ├── enum/
-│   ├── comparison.py    ComparisonOperator enum
-│   └── severity.py      SeverityLevel enum
+│   ├── actor_type.py          ActorType enum
+│   ├── comparison.py          ComparisonOperator enum
+│   ├── evaluation_status.py   EvaluationStatus enum
+│   ├── severity.py            SeverityLevel enum
+│   └── skip_reason.py         SkipReason enum
 ├── error/
+│   ├── engine_error.py         Engine usage errors
 │   ├── policy_read_error.py    PolicyReader exception hierarchy
 │   ├── policy_pack_read_error.py  PolicyPackReader exception hierarchy
 │   └── schema_validation_error.py  Reusable schema-validation error
 ├── model/
+│   ├── execution_context.py       Actor and execution provenance
+│   ├── evaluation_context.py      Engine inputs
+│   ├── evaluation_result.py       Immutable findings and results
 │   ├── policy_definition.py       Frozen policy dataclasses
 │   ├── policy_pack_definition.py  Frozen pack dataclasses
 │   └── immutable.py               Recursive immutable-value helper
@@ -889,6 +1020,19 @@ govlattice/
 │   ├── json_schema_validator.py    Reusable JSON Schema validation
 │   ├── policy_validator.py         Policy contract checks
 │   └── policy_pack_validator.py    Pack contract checks
+├── adapter/
+│   ├── dataset_adapter.py          DatasetAdapter protocol
+│   └── records_dataset_adapter.py  Built-in records adapter
+├── evaluator/
+│   ├── builtin/                    One evaluator per requirement type
+│   ├── support/                    Shared column and comparison helpers
+│   ├── builtin_registry.py         Explicit built-in evaluator catalog
+│   ├── evaluator_registry.py       Safe registration and lookup
+│   ├── requirement_evaluation_context.py  Stable evaluator inputs
+│   ├── requirement_evaluator.py    Evaluator protocol and result
+│   └── builtin_evaluators.py       Backward-compatible import facade
+├── engine/
+│   └── govlattice_engine.py        Verify workflow orchestration
 ├── designer/            Top-level policy and pack APIs
 ├── builder/             Fluent builders and YAML serializers
 ├── nodes/               Internal domain representation
@@ -912,6 +1056,12 @@ Responsibility boundaries:
 - File helpers validate paths, create directories, and perform atomic writes.
 - A Validator checks serialized contracts independently of reading or
   designing policies.
+- An Evaluator implements one requirement type without adding
+  requirement-specific logic to the Engine.
+- The Evaluator Registry rejects accidental duplicate registrations and
+  permits intentional replacement only with `replace=True`.
+- `RequirementEvaluationContext` supplies the scoped dataset, runtime metrics,
+  and execution information through a stable evaluator contract.
 
 `JsonSchemaValidator` is reusable infrastructure. It accepts a schema path,
 validates arbitrary mapping documents, formats field-level errors, and caches
@@ -924,7 +1074,7 @@ The existing `verifier/` package remains separate:
 - `validator/` checks serialized document contracts.
 - `verifier/` checks semantic relationships between domain nodes.
 
-## 14. Design Decisions
+## 15. Design Decisions
 
 ### Policy names are not duplicated as `self.policy_id`
 
@@ -980,7 +1130,7 @@ The writer remains dependency-free, but the reader uses PyYAML rather than a
 custom YAML parser. JSON Schema validation uses `jsonschema` so the serialized
 schema remains the validation source of truth.
 
-## 15. Local Development
+## 16. Local Development
 
 The repository contains a `.venv` at its root. Run commands from the project
 root:
@@ -992,6 +1142,8 @@ python -m unittest discover -s tests -v
 python dev/dev_policy_desinger.py
 python dev/dev_pack_eu_ai_act.py
 python dev/dev_policy_reader.py
+python dev/dev_policy_pack_reader.py
+python dev/dev_engine_verify.py
 ```
 
 Without activating the environment:
@@ -1017,6 +1169,8 @@ Current examples:
   policy.
 - `dev/dev_policy_pack_reader.py`: Secure loading and inspection of a
   generated policy pack.
+- `dev/dev_engine_verify.py`: Record-based policy verification with actor
+  provenance.
 
 The existing filename `dev_policy_desinger.py` contains the spelling
 `desinger`; this section intentionally reflects the current repository name.
@@ -1028,7 +1182,7 @@ PyYAML>=6.0,<7
 jsonschema>=4.0,<5
 ```
 
-## 16. Testing Expectations
+## 17. Testing Expectations
 
 The project uses the standard-library `unittest` framework.
 
@@ -1047,16 +1201,21 @@ Changes to behavior should test at least:
   definitions, and unsupported schema versions.
 - Safe policy-pack reading, path and symlink containment, cross-file
   consistency, eager loading, and duplicate detection.
+- Engine status aggregation, built-in evaluators, composite uniqueness,
+  segment scoping, optional actor provenance, empty data, and custom
+  evaluators.
 
 The generated `policies/` directory is ignored by Git because it is user
 output, not source code.
 
-## 17. Current Limitations and Deferred Ideas
+## 18. Current Limitations and Deferred Ideas
 
 The following features are not implemented and must not be presented as
 available:
 
-- A runtime engine that evaluates data or models from YAML.
+- Policy enforcement that blocks a workflow.
+- Direct evaluation of a `PolicyPackDefinition`.
+- Native Pandas, Polars, Spark, and SQL adapters.
 - Reading older policy schemas through migrations.
 - Nested segments.
 - Conditions other than `between`.
@@ -1078,7 +1237,7 @@ available:
 These are extension candidates only. Discuss their public APIs and serialized
 contracts before changing the project structure or schemas.
 
-## 18. Change Guidelines
+## 19. Change Guidelines
 
 When implementing a new feature:
 
@@ -1094,7 +1253,7 @@ When implementing a new feature:
    builders, examples, and tests together.
 8. Update this document to describe only behavior that has been implemented.
 
-## 19. Source-of-Truth Priority
+## 20. Source-of-Truth Priority
 
 If project information conflicts, use this order:
 

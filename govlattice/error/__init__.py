@@ -19,6 +19,7 @@ from govlattice.error.policy_pack_read_error import (
 from govlattice.error.schema_validation_error import SchemaValidationError
 
 __all__ = [
+    "GovLatticeEngineError",
     "PolicyFileError",
     "PolicyPackConsistencyError",
     "PolicyPackFileError",
@@ -30,4 +31,7 @@ __all__ = [
     "SchemaValidationError",
     "UnsupportedPolicySchemaError",
     "UnsupportedPolicyPackSchemaError",
+    "UnknownPolicyStateError",
 ]
+from govlattice.error.engine_error import GovLatticeEngineError
+from govlattice.error.engine_error import UnknownPolicyStateError

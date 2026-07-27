@@ -8,8 +8,8 @@ conditional segments, lifecycle metadata, external references, and reusable
 policy packs. The generated YAML is designed for Git-based review and sharing
 across teams.
 
-> GovLattice currently defines and exports policies. It does not yet execute
-> those policies against datasets or models.
+> GovLattice can verify policies against record-based datasets. Enforcement
+> and native Pandas, Polars, Spark, or SQL adapters are not implemented yet.
 
 ## Features
 
@@ -23,6 +23,8 @@ across teams.
 - Custom YAML-compatible metadata
 - Versioned policy packs
 - Safe, schema-validated policy reading
+- Policy verification with immutable audit results
+- Adapter-based datasets and optional actor provenance
 - Deterministic YAML with atomic file writes
 - JSON Schemas for policy and pack output
 
@@ -31,7 +33,7 @@ across teams.
 ```python
 import govlattice
 
-print(govlattice.__version__)              # 0.9.0
+print(govlattice.__version__)              # 0.10.0
 print(govlattice.__schema_version__)       # 1.6.0
 print(govlattice.__pack_schema_version__)  # 1.2.0
 ```
@@ -418,6 +420,131 @@ The pack reader:
 Both readers currently support only their current schema versions. Schema
 migration is not implemented yet.
 
+## Verifying a Policy
+
+`GovLatticeEngine.verify()` evaluates a loaded policy without blocking the
+calling workflow when requirements fail:
+
+```python
+from govlattice import (
+    ActorProfile,
+    EvaluationContext,
+    ExecutionContext,
+    GovLatticeEngine,
+    PolicyReader,
+    RecordsDatasetAdapter,
+)
+
+policy = PolicyReader.read("policies/health_policy.yml")
+
+context = EvaluationContext(
+    RecordsDatasetAdapter(
+        [
+            {
+                "id": 1,
+                "email": "a@example.com",
+                "age": 30,
+                "hba1c": 5.4,
+            },
+            {
+                "id": 1,
+                "email": "b@example.com",
+                "age": 65,
+                "hba1c": 6.1,
+            },
+        ]
+    ),
+    metrics={"recall": 0.9},
+    execution=ExecutionContext(
+        actor=ActorProfile(
+            "user-1842",
+            display_name="Logan",
+            team="data-quality",
+        ),
+        environment="staging",
+        run_id="run-001",
+    ),
+)
+
+result = GovLatticeEngine().verify(
+    policy,
+    state="validated_dataset",
+    context=context,
+)
+
+print(result.status)
+print(result.passed_count)
+print(result.failed_count)
+print(result.error_count)
+```
+
+Verification behavior:
+
+- Requires an explicit policy state.
+- Evaluates state requirements against the full dataset.
+- Filters each segment with its inclusive `between` condition.
+- Evaluates segment requirements against the filtered records.
+- Treats `require_unique("id", "email")` as composite uniqueness.
+- Returns `FAILED` as a result and does not raise for non-compliance.
+- Returns `ERROR` findings for missing metrics, missing required evaluation
+  columns, unsupported evaluators, and non-comparable values.
+- Treats an empty state dataset as `ERROR`.
+- Treats an empty segment as `SKIPPED`.
+- Treats a disabled policy as `SKIPPED`.
+- Accepts an optional actor profile; a missing actor does not skip policy
+  evaluation.
+- Records start time, completion time, duration, environment, run ID, source,
+  and actor snapshot.
+
+Current statuses are:
+
+```python
+EvaluationStatus.PASSED
+EvaluationStatus.FAILED
+EvaluationStatus.SKIPPED
+EvaluationStatus.ERROR
+```
+
+The initial adapter is `RecordsDatasetAdapter`, which accepts a list or tuple
+of mapping records. `DatasetAdapter` is a runtime-checkable protocol for
+future Pandas, Polars, Spark, or SQL adapters.
+
+Built-in evaluators support all current requirement types. Custom evaluators
+can be registered through `GovLatticeEngine.register_evaluator()`.
+
+```python
+from govlattice import RequirementEvaluation
+
+
+class RowCountEvaluator:
+    requirement_type = "require_row_count"
+
+    def evaluate(self, requirement, context):
+        minimum = requirement.parameters["minimum"]
+        actual = context.dataset.row_count
+        result = (
+            RequirementEvaluation.passed
+            if actual >= minimum
+            else RequirementEvaluation.failed
+        )
+        return result(
+            expected=requirement.parameters,
+            observed={"row_count": actual},
+            message="row count requirement evaluated",
+        )
+
+
+engine = GovLatticeEngine().register_evaluator(RowCountEvaluator())
+```
+
+Evaluators receive a stable context containing the scoped dataset, runtime
+metrics, and execution information. Duplicate requirement types are rejected
+unless registration explicitly uses `replace=True`. The former
+`register_evaluator(requirement_type, evaluator)` API remains supported.
+
+`enforce()` is intentionally not implemented yet. The current `verify()`
+semantics should be reviewed before enforcement behavior is added.
+
 ## YAML Output
 
 Example policy output:
@@ -480,6 +607,7 @@ Run the examples:
 .venv/bin/python dev/dev_pack_eu_ai_act.py
 .venv/bin/python dev/dev_policy_reader.py
 .venv/bin/python dev/dev_policy_pack_reader.py
+.venv/bin/python dev/dev_engine_verify.py
 ```
 
 Generated files are written under `policies/`, which is ignored by Git.
